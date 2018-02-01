@@ -15,7 +15,6 @@ install_reqs.append('setuptools')
 
 
 setup(name='artem',
-      packages=['artem'],
       version=VERSION,
       description='Simple core for creating chat bots in VK.com',
       author='ParadoxMaster',
