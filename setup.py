@@ -18,14 +18,11 @@ setup(name='artem',
       version=VERSION,
       description='Simple core for creating chat bots in VK.com',
       author='ParadoxMaster',
-      author_email='chesh397@mail.ru',
-      url='https://github.com/tgjmjgj/artem',
-      download_url = 'https://github.com/tgjmjgj/artem/archive/1.9.13.tar.gz',
+      author_email='Chesh397@mail.ru',
+      url='https://github.com/Tgjmjgj/artem',
+      download_url = ('https://github.com/Tgjmjgj/artem/archive/' + 
+            artem.artem_core.VERSION + '.tar.gz'),
       packages=find_packages(),
-      package_data={'': ['LICENSE',
-                         'README.md',
-                         'requirements.txt']
-                    },
       include_package_data=True,
       install_requires=install_reqs,
       extras_require={},
@@ -47,6 +44,6 @@ setup(name='artem',
       long_description="""
 Simple core for creating chat bots in VK.com
 =============
-eMail: mail@chesh397.ru
-This project is hosted at https://github.com/tgjmjgj/artem
+eMail: Chesh397@mail.ru
+This project is hosted at https://github.com/Tgjmjgj/artem
 """)

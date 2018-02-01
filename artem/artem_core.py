@@ -17,7 +17,7 @@ from .others import *
 from .cmd import Control
 
 
-VERSION = '1.9.13'
+VERSION = '1.9.14'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
