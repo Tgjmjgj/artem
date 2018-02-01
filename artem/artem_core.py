@@ -7,6 +7,7 @@ import traceback
 import queue
 import sys
 import time
+import os
 
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
@@ -17,13 +18,18 @@ from .others import *
 from .cmd import Control
 
 
-VERSION = '1.9.14'
+VERSION = '1.9.15'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
 CHAT_ID_MAX = 10000
-ERROR_LOG_FILE = (('log\\' if sys.platform == 'win32' else 'log/') + 
-        'artem_' + VERSION + '.log')
+
+if not os.path.exists('log'):
+    os.makedirs('log')
+
+ERROR_LOG_FILE = (('log\\' if sys.platform == 'win32' else 'log/') +
+                  'artem_' + VERSION + '.log')
+
 
 class Artem(object):
 
