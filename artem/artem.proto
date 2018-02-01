@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+message ProtoArtem {
+    repeated int32 admins = 1;
+    int32 default_discourse_interval_max = 2;
+    repeated string default_names = 3;
+    float pooling_interval = 4;
+    float default_session_duration = 5;
+    bool default_sessions = 6;
+
+    message ProtoThread {
+        int32 some_id = 1;
+        int32 discourse_interval_max = 2;
+        repeated string names = 3;
+        float session_duration = 4;
+        bool sessions = 5;
+    }
+
+    repeated ProtoThread dialog_threads = 7;
+}
