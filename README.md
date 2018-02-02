@@ -28,4 +28,4 @@ python setup.py install
 
 ## The simplified scheme of the Artem core functioning:
 
-![Artem Scheme](https://s3-eu-west-1.amazonaws.com/images.someone.new.name/artem.png)
+<img src = "https://s3-eu-west-1.amazonaws.com/images.someone.new.name/artem.png" width='520' align="middle" alt="Artem scheme"/>
