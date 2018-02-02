@@ -17,7 +17,7 @@ class Scenario(object):
     i_sender = None
     is_personal = None
     answer = None
-
+        
     # return boolean
     @staticmethod
     def suitable(message, i_sender, interlocutors, is_personal, name):
@@ -26,6 +26,13 @@ class Scenario(object):
     # function(self, message)
     # return answers [{message: 'str', sleep: 1.0, attach: 'photo'}]
     respond = lambda self: [u'Тест сценария ' + self.__class__.__name__]
+
+def wrapup(func):
+    def wrap(self):
+        ret = func()
+        self.respond = None
+        return ret
+    return wrap
 
 def m(text, sleep=0.0, attach=None):
     if sleep == 0.0:

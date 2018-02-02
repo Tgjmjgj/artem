@@ -6,6 +6,7 @@ import re
 import traceback
 import queue
 import sys
+import types
 import time
 import os
 
@@ -15,10 +16,11 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 from .dialogthread import DialogThread
 from .artem_pb2 import ProtoArtem
 from .others import *
+from .scenario import Scenario, wrapup
 from .cmd import Control
 
 
-VERSION = '1.9.15'
+VERSION = '1.9.16'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
@@ -61,15 +63,21 @@ class Artem(object):
         self._id = response[0]['id']
         self._names = sorted(names)
 
-    def on(self, event, scenario_class_type, prior=0):
+    def on(self, event, handler, prior=0):
 
         try:
             if type(event) != Event:
                 event = Event[event]
-            self._lib.add(event, scenario_class_type, prior)
-            for id in self._dialog_threads:
-                (self._dialog_threads[id].lib.add(
-                        event, scenario_class_type, prior))
+            if isinstance(handler, types.FunctionType):
+                handler = type(
+                        'Scenario' + str(id(handler)),
+                        (Scenario,),
+                        {'respond': wrapup(handler)}
+                    )
+            self._lib.add(event, handler, prior)
+            for id_ in self._dialog_threads:
+                (self._dialog_threads[id_].lib.add(
+                        event, handler, prior))
 
         except Exception:
             self._logger.error(traceback.format_exc())
@@ -95,7 +103,8 @@ class Artem(object):
                 self._vk = vk_api.VkApi(
                         login, password, 
                         auth_handler = lambda: 
-                        (input('Enter authentication code: '), True))
+                        (input('Enter authentication code: '), True)
+                    )
             self._vk.auth()
 
         except Exception:
@@ -121,8 +130,8 @@ class Artem(object):
                 inters = [Interlocutor(
                             some_id,
                             response[0]['first_name'],
-                            response[0]['last_name'])
-                         ]
+                            response[0]['last_name']
+                         )]
             return inters
 
     def _create_dialog_thread(
