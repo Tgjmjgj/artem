@@ -12,8 +12,8 @@ def run_scen(scen):
         elif type(new_answers) == str:
             new_answers = [m(new_answers)]
         for answer in new_answers:
-            if ('message' not in answer or 
-                    'sleep' not in answer or 'attach' not in answer):
+            if  not ('message' in answer and 'sleep' in answer and 
+                    'attach' in answer and 'sticker' in answer):
                 return [m('')]
         if scen.message:
             scen.messages_history.append(scen.message)
@@ -30,9 +30,8 @@ def run_scen(scen):
         else:
             try:
                 for answer in new_answers:
-                    if ('message' not in answer
-                            or 'sleep' not in answer or 
-                            'attach' not in answer):
+                    if not ('message' in answer and 'sleep' in answer and
+                            'attach' in answer and 'sticker' in answer):
                         return [m(scen.answer)]
             except Exception:
                 return [m(scen.answer)]
@@ -47,7 +46,6 @@ class EventMetaclass(enum.EnumMeta):
             if item.name == key:
                 return item
         return None
-        return super().__getitem__(key)
 
 
 class Event(enum.Enum, metaclass=EventMetaclass):
@@ -248,10 +246,12 @@ class Envelope(object):
 
 class ToSend(object):
 
-    def __init__(self, some_id, message, attachment):
+    def __init__(self, some_id, message,
+                 attachment=None, sticker=None):
         self.id = some_id
         self.message = message
         self.attach = attachment
+        self.sticker = sticker
 
     @property
     def id(self):
@@ -276,6 +276,14 @@ class ToSend(object):
     @attach.setter
     def attach(self, value):
         self._attach = value
+
+    @property
+    def sticker(self):
+        return self._sticker
+
+    @sticker.setter
+    def sticker(self, value):
+        self._sticker = value
 
 
 class Wrap(object):

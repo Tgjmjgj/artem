@@ -125,18 +125,23 @@ class DialogThread(threading.Thread):
                         lambda a: (a, len(a) > 1),
                         ans['message'], False
                         )
-                    attach = None
+                    attach, sticker = None, None
                     if ans['attach']:
                         attach = ans['attach']
+                    if ans['sticker']:
+                        sticker = ans['sticker']
                     #print(postproc_answers)
                     for i in range(0, len(postproc_answers)):
                         send = ToSend(
                                 self.some_id,
                                 postproc_answers[i]['message'],
-                                postproc_answers[i]['attach'])
-                        if i == 0: 
-                            if not postproc_answers[i]['attach']:
+                                postproc_answers[i]['attach'],
+                                postproc_answers[i]['sticker'])
+                        if i == 0:
+                            if not postproc_answers[0]['attach']:
                                 send.attach = attach
+                            if not postproc_answers[0]['sticker']:
+                                send.sticker = sticker
                         else:
                             time.sleep(postproc_answers[i]['sleep'])
                         self._postback_queue.put(send)

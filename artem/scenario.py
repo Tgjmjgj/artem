@@ -27,17 +27,38 @@ class Scenario(object):
     # return answers [{message: 'str', sleep: 1.0, attach: 'photo'}]
     respond = lambda self: [u'Тест сценария ' + self.__class__.__name__]
 
-def wrapup(func):
+def wrap_respond(func):
     def wrap(self):
-        ret = func()
+        if isinstance(func, str):
+            ret = func
+        else:
+            ret = func()
         self.respond = None
         return ret
     return wrap
 
-def m(text, sleep=0.0, attach=None):
+def wrap_suitable(func):
+    def wrap(message, i_sender, interlocutors, is_personal, name):
+        if isinstance(func, str):
+            if func[0] == '<' and func[-1] == '>':
+                words = func[1:-1].split('|')
+                if find_element(words, lambda w: w in message):
+                    return True
+                else:
+                    return False
+            else:
+                return message == func
+        elif func(message):
+            return True
+        else:
+            return False
+    return staticmethod(wrap)
+
+def m(text, sleep=0.0, attach=None, sticker=None):
     if sleep == 0.0:
-        sleep = 1.0 + 2 * round(random.random(), 3)
-    return {'message': text, 'sleep': sleep, 'attach': attach}    
+        sleep = 1.0 + 5 * round(random.random(), 3)
+    return {'message': text, 'sleep': sleep,
+            'attach': attach, 'sticker' : sticker}    
 
 def set_env(scen, interlocutors, names):
     scen.messages_history = []

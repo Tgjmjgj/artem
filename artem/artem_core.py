@@ -16,10 +16,10 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 from .dialogthread import DialogThread
 from .artem_pb2 import ProtoArtem
 from .others import *
-from .scenario import Scenario, wrapup
+from .scenario import Scenario, wrap_respond, wrap_suitable
 from .cmd import *
 
-VERSION = '1.10.01'
+VERSION = '1.10.02'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
@@ -40,13 +40,14 @@ class Artem(object):
                enabled_session=True, restore=True, twofact_auth=False):
 
         self._lib = Lib()
-        # {some_id: DialogThread}
+        # {some_id: [DialogThread, status(True/False])}
         self._dialog_threads = {} 
         self._restore = restore
         self._global_admins = admins
         self._secondary_pooling_interval = Wrap()
         self._secondary_pooling_interval.val = DEFAULT_POOLING_INTERVAL
         self._send_queue = queue.Queue()
+        self._run = True
         
         self._create_logger()
         self._vk_init(login, password, twofact_auth)
@@ -62,19 +63,34 @@ class Artem(object):
         self._id = response[0]['id']
         self._global_names = sorted(names)
 
-    def on(self, event, handler, prior=0):
+    def on(self, event, scen=None, prior=0, handler=None, suitable=None):
 
         try:
-            if isinstance(handler, types.FunctionType):
-                handler = type(
+            if handler:
+                if not (isinstance(handler, types.FunctionType) or
+                        isinstance(handler, types.BuiltinFunctionType) or
+                        isinstance(handler, types.MethodType) or
+                        isinstance(handler, types.BuiltinMethodType) or
+                        isinstance(handler, str)):
+                    raise TypeError('Handler must be function or str value')
+                elif suitable:
+                    if not (isinstance(suitable, types.FunctionType) or
+                            isinstance(suitable, types.BuiltinFunctionType) or
+                            isinstance(suitable, types.MethodType) or
+                            isinstance(suitable, types.BuiltinMethodType) or
+                            isinstance(suitable, str)):
+                        raise TypeError('Suitable must be function or str value')
+                scen = type(
                         'Scenario' + str(id(handler)),
                         (Scenario,),
-                        {'respond': wrapup(handler)}
+                        {'respond': wrap_respond(handler),
+                            'suitable': wrap_suitable(suitable)}
                     )
-            self._lib.add(event, handler, prior)
+
+            self._lib.add(event, scen, prior)
             for id_ in self._dialog_threads:
-                (self._dialog_threads[id_].lib.add(
-                        event, handler, prior))
+                (self._dialog_threads[id_][0].lib.add(
+                        event, scen, prior))
 
         except Exception:
             self._logger.error(traceback.format_exc())
@@ -140,7 +156,7 @@ class Artem(object):
                     start, self._global_names, self._global_admins
                 )
             dialog_thread.start()
-            self._dialog_threads[some_id] = dialog_thread
+            self._dialog_threads[some_id] = [dialog_thread, True]
             if not start and self._restore:
                 self._serialize()
 
@@ -156,13 +172,13 @@ class Artem(object):
                 thr = art.dialog_threads.add()
                 thr.some_id = id_
                 thr.discourse_interval_max = (
-                        self._dialog_threads[id_].discourse_interval_max.val)
+                        self._dialog_threads[id_][0].discourse_interval_max.val)
                 thr.session_duration = (
-                        self._dialog_threads[id_].session_duration.val)
-                thr.sessions = self._dialog_threads[id_].enabled_session.val
-                for name in self._dialog_threads[id_].local_names:
+                        self._dialog_threads[id_][0].session_duration.val)
+                thr.sessions = self._dialog_threads[id_][0].enabled_session.val
+                for name in self._dialog_threads[id_][0].local_names:
                     thr.names.append(name)
-                for admin in self._dialog_threads[id_].local_admins:
+                for admin in self._dialog_threads[id_][0].local_admins:
                     thr.names.append(admin)
 
             with open(SERIALIZE_FILE, 'wb') as protobuf_file:
@@ -182,7 +198,7 @@ class Artem(object):
             self._secondary_pooling_interval.val = art.pooling_interval
             for thr in art.dialog_threads:
                 self._create_dialog_thread(thr.some_id, start=True)
-                self._dialog_threads[thr.some_id].restore(
+                self._dialog_threads[thr.some_id][0].restore(
                         thr.sessions, thr.session_duration,
                         thr.discourse_interval_max,
                         [name for name in thr.names], 
@@ -197,21 +213,22 @@ class Artem(object):
         while True:
             try:
                 answer = self._send_queue.get()
-                if answer.id < CHAT_ID_MAX:
-                    self._vk.method(
-                            'messages.send',
-                            {'chat_id': answer.id, 
+                if answer.attach:
+                    if answer.attach.startswith('http'):
+                        url = self._vk.method('photos.getMessagesUploadServer')['upload_url']
+                        response = self._vk.http.post(url, answer.attach)
+                        print(response)
+                    
+                whose_id = 'chat_id' if answer.id < CHAT_ID_MAX else 'user_id'
+                self._vk.method(
+                        'messages.send',
+                        {
+                            whose_id: answer.id, 
                             'message': answer.message,
-                            'attachment': answer.attach}
-                            )
-                else:
-                    self._vk.method(
-                            'messages.send', 
-                            {'user_id': answer.id, 
-                            'message': answer.message,
-                            'attachment': answer.attach}
-                            )
-
+                            'attachment': answer.attach,
+                            'sticker_id': answer.sticker
+                        }
+                    )
             except Exception:
                 self._logger.error(traceback.format_exc())
 
@@ -233,7 +250,7 @@ class Artem(object):
                                 )
                         if item['user_id'] not in self._dialog_threads:
                             self._create_dialog_thread(item['user_id'])
-                        (self._dialog_threads[item['user_id']]
+                        (self._dialog_threads[item['user_id']][0]
                                 .queue.put(Envelope(
                                     Event.ADDFRIEND,
                                     item['user_id'], None)
@@ -265,26 +282,30 @@ class Artem(object):
                         if event.text.startswith('/'):
                             self._commands(event.text.lower(), 
                                            event.user_id, some_id)
-                        else:
-                            (self._dialog_threads[some_id].
-                                    queue.put(Envelope(
-                                        Event.ANSWER,
-                                        event.user_id, event.text.lower())
-                                    ))
+                        elif self._run:
+                            if self._dialog_threads[some_id][1]:
+                                (self._dialog_threads[some_id][0].
+                                    queue.put(
+                                        Envelope(
+                                            Event.ANSWER,
+                                            event.user_id, event.text.lower()
+                                        )
+                                    )
+                                )
             except Exception:
                 self._logger.error(traceback.format_exc())
 
     def _commands(self, message, user_id, some_id):
         if user_id in self._global_admins:
             admin = AdminClass.GLOBAL
-        elif user_id in self._dialog_threads[some_id].local_admins:
+        elif user_id in self._dialog_threads[some_id][0].local_admins:
             admin = AdminClass.LOCAL
         else:
             admin = AdminClass.NONE
         answer, need_save = self._cmd.execute(message, some_id, admin)
         if need_save:
             self._serialize()
-        self._send_queue.put(ToSend(some_id, answer, None))
+        self._send_queue.put(ToSend(some_id, answer))
 
     def _control_init(self):
         self._cmd = Control()
@@ -304,7 +325,7 @@ class Artem(object):
                  [ArgType.WORD, ArgRole.FUNC_ARG]],
                 lambda some_id, *args: 
                     ('Local scenario status: ' + 
-                    ('ON' if self._dialog_threads[some_id].lib.get_status(args[0], args[1])
+                    ('ON' if self._dialog_threads[some_id][0].lib.get_status(args[0], args[1])
                           else 'OFF'))
             ).action(
                 CommandType.INFO,
@@ -322,7 +343,7 @@ class Artem(object):
                  [ArgType.WORD, ArgRole.ARG],
                  [ArgType.ON_OFF, ArgRole.ARG]],
                 lambda some_id:
-                    self._dialog_threads[some_id].lib.set_status
+                    self._dialog_threads[some_id][0].lib.set_status
             ).action(
                 CommandType.ON_OFF,
                 AdminClass.GLOBAL,
@@ -357,7 +378,7 @@ class Artem(object):
                 [],
                 lambda some_id:
                     ('Local admins: ' + ', '.join(
-                        [str(a) for a in self._dialog_threads[some_id].local_admins]))
+                        [str(a) for a in self._dialog_threads[some_id][0].local_admins]))
             ).action(
                 CommandType.INFO,
                 AdminClass.NONE,
@@ -371,7 +392,7 @@ class Artem(object):
                 AdminClass.LOCAL,
                 [[ArgType.INTEGER, ArgRole.APPEND]],
                 lambda some_id:
-                    self._dialog_threads[some_id].local_admins
+                    self._dialog_threads[some_id][0].local_admins
             ).action(
                 CommandType.ADD_DEL,
                 AdminClass.GLOBAL,
@@ -388,7 +409,7 @@ class Artem(object):
                 [],
                 lambda some_id:
                     ('Artem local names: ' + ', '.join(
-                        [str(a) for a in self._dialog_threads[some_id].local_names]))
+                        [str(a) for a in self._dialog_threads[some_id][0].local_names]))
             ).action(
                 CommandType.INFO,
                 AdminClass.NONE,
@@ -402,7 +423,7 @@ class Artem(object):
                 AdminClass.LOCAL,
                 [[ArgType.STRING, ArgRole.APPEND]],
                 lambda some_id:
-                    self._dialog_threads[some_id].local_names
+                    self._dialog_threads[some_id][0].local_names
             ).action(
                 CommandType.ADD_DEL,
                 AdminClass.GLOBAL,
@@ -418,14 +439,14 @@ class Artem(object):
                 [],
                 lambda some_id:
                     'Sessions ' + ('enabled'
-                        if self._dialog_threads[some_id].enabled_session.val
+                        if self._dialog_threads[some_id][0].enabled_session.val
                         else 'disabled') +' in local chat'
             ).action(
                 CommandType.ON_OFF,
                 AdminClass.LOCAL,
                 [[ArgType.ON_OFF, ArgRole.VALUE]],
                 lambda some_id:
-                    self._dialog_threads[some_id].enabled_session
+                    self._dialog_threads[some_id][0].enabled_session
             )
         self._cmd.add('session_duration', 'Get or set duration of session'
             ).action(
@@ -434,13 +455,13 @@ class Artem(object):
                 [],
                 lambda some_id:
                     ('Session duration = ' +
-                        str(self._dialog_threads[some_id].session_duration.val) + ' sec')
+                        str(self._dialog_threads[some_id][0].session_duration.val) + ' sec')
             ).action(
                 CommandType.SET,
                 AdminClass.GLOBAL,
                 [[ArgType.FLOAT, ArgRole.VALUE]],
                 lambda some_id:
-                    self._dialog_threads[some_id].session_duration
+                    self._dialog_threads[some_id][0].session_duration
             )
         self._cmd.add('discourse_interval',
             'Get or set maximal time between two discourse'
@@ -450,13 +471,13 @@ class Artem(object):
                 [],
                 lambda some_id:
                     ('Max discourse interval = ' +
-                        str(self._dialog_threads[some_id].discourse_interval_max.val) + ' sec')
+                        str(self._dialog_threads[some_id][0].discourse_interval_max.val) + ' sec')
             ).action(
                 CommandType.SET,
                 AdminClass.GLOBAL,
-                [[ArgType.FLOAT, ArgRole.VALUE]],
+                [[ArgType.INTEGER, ArgRole.VALUE]],
                 lambda some_id:
-                    self._dialog_threads[some_id].discourse_interval_max
+                    self._dialog_threads[some_id][0].discourse_interval_max
             )
         self._cmd.add('events',
             'Get information about event types and their scenarios'
@@ -490,10 +511,10 @@ class Artem(object):
                 AdminClass.GLOBAL,
                 [[ArgType.INTEGER, ArgRole.FUNC_ARG]],
                 lambda some_id, *args:
-                    ('Dialog ' + str(args[0]) + ' interlocutors:\n' +
+                    ('Interlocutors of dialog ' + str(args[0]) + ':\n' +
                         '\n'.join(
                             (str(i.id) + ' - ' + i.first_name + ' ' + i.last_name)
-                            for i in self._dialog_threads[args[0]].interlocutors
+                            for i in self._dialog_threads[args[0]][0].interlocutors
                         )
                     )
             )
@@ -513,7 +534,69 @@ class Artem(object):
                  [ArgType.MESSAGE, ArgRole.FUNC_ARG]],
                 lambda some_id, *args:
                     self._send_queue.put(ToSend(
-                        args[0], args[1][0].upper() + args[1][1:], None))
+                        args[0], args[1][0].upper() + args[1][1:]))
+            )
+        self._cmd.add('stop', 'Stop responding to incoming messages'
+            ).action(
+                CommandType.INFO,
+                AdminClass.LOCAL,
+                [],
+                lambda some_id:
+                    self._stop_artem(some_id)
+            ).action(
+                CommandType.INFO,
+                AdminClass.GLOBAL,
+                [],
+                self._stop_artem,
+                glob=True
+            )
+        self._cmd.add('resume', 'Resume responding of incoming messages'
+            ).action(
+                CommandType.INFO,
+                AdminClass.LOCAL,
+                [],
+                lambda some_id:
+                    self._resume_artem(some_id)
+            ).action(
+                CommandType.INFO,
+                AdminClass.GLOBAL,
+                [],
+                self._resume_artem,
+                glob=True
+            )
+        self._cmd.add('sleep','Stop Artem for a while'
+            ).action(
+                CommandType.INFO,
+                AdminClass.LOCAL,
+                [[ArgType.INTEGER, ArgRole.FUNC_ARG]],
+                lambda some_id, *args:
+                    self._sleep_artem(args[0], some_id)
+            ).action(
+                CommandType.INFO,
+                AdminClass.GLOBAL,
+                [[ArgType.INTEGER, ArgRole.FUNC_ARG]],
+                self._sleep_artem,
+                glob=True
             )
 
-        
+    def _stop_artem(self, some_id=None):
+        if some_id:
+            self._dialog_threads[some_id][1] = False
+        else:
+            self._run = False
+
+    def _resume_artem(self, some_id=None):
+        if some_id:
+            self._dialog_threads[some_id][1] = True
+        else:
+            self._run = True
+
+    def _sleep_artem(self, interval, some_id=None):
+        if some_id:
+            self._dialog_threads[some_id][1] = False
+            args = {some_id}
+        else:
+            self._run = False
+            args = {}
+        timer = threading.Timer(interval, self._resume_artem, args)
+        timer.start()

@@ -20,6 +20,8 @@ class ArgType(enum.Enum):
     STRING = 5
     ON_OFF = 6
     MESSAGE = 7
+    TRUE = 8
+    FALSE = 9
 
 class ArgRole(enum.Enum):
     VALUE = 1
@@ -53,13 +55,15 @@ class Control(object):
                 ArgType.FLOAT: ' ([0-9]){1,5}(.([0-9]){1,10}){0,1}',
                 ArgType.STRING: ' ([_ a-zа-я0-9](?!global)){1,20}',
                 ArgType.ON_OFF: '',
-                ArgType.MESSAGE: '.+'
+                ArgType.MESSAGE: '.+',
+                ArgType.TRUE: '',
+                ArgType.FALSE: ''
             }
 
             def __init__(self, command, cmd_type, need_admin, args, func, glob):
                 self._command = command
                 self._cmd_type = cmd_type
-                self._need_admin = need_admin
+                self.need_admin = need_admin
                 self._args = args
                 self._func = func
                 self._glob = glob
@@ -88,12 +92,12 @@ class Control(object):
                 self._pattern = value
 
             def Do(self, cmd, some_id, admin):
-                if (self._need_admin == AdminClass.GLOBAL and
+                if (self.need_admin == AdminClass.GLOBAL and
                         admin != AdminClass.GLOBAL):
                     answer = ('To allow this command you need global admin ' +
                         'privileges')
                     return answer, False
-                elif (self._need_admin == AdminClass.LOCAL and
+                elif (self.need_admin == AdminClass.LOCAL and
                         admin == AdminClass.NONE):
                     answer = 'To allow this command you need admin privileges'
                     return answer, False
@@ -113,7 +117,16 @@ class Control(object):
                         begin = l + 5
                         
                     for arg in self._args:
-                        if arg[0] != ArgType.ON_OFF:
+                        if arg[0] == ArgType.ON_OFF:
+                            args_val.append([
+                                    True if subcmd[0:2] == 'on' else False,
+                                    arg[1]
+                                ])
+                        elif arg[0] == ArgType.TRUE:
+                            args_val.append([True, arg[1]])
+                        elif arg[0] == ArgType.FALSE:
+                            args_val.append([False, arg[1]])
+                        else:
                             cmd = cmd[begin:]
                             if cmd.startswith(' global'):
                                 break
@@ -127,30 +140,28 @@ class Control(object):
                             elif arg[0] == ArgType.INTEGER:
                                 val = int(val)
                             args_val.append([val, arg[1]])
-                        else:
-                            args_val.append([
-                                    True if subcmd[0:2] == 'on' else False,
-                                    arg[1]
-                                ])
+
                     res = None
                     func_args = [
                         a[0] for a in args_val if a[1] == ArgRole.FUNC_ARG
                         ]
                     try:
-                        if self._glob:
-                            if func_args:
+                        if func_args:
+                            if self._glob:
                                 res = self._func(*func_args)
-                            elif isinstance(self._func, types.FunctionType):
+                            else:
+                                res = self._func(some_id, *func_args)
+                        elif (isinstance(self._func, types.FunctionType) or
+                            isinstance(self._func, types.BuiltinFunctionType) or
+                            isinstance(self._func, types.MethodType) or
+                            isinstance(self._func, types.BuiltinMethodType)
+                            ):
+                            if self._glob:
                                 res = self._func()
                             else:
-                                res = self._func
-                        else:
-                            if func_args:
-                                res = self._func(some_id, *func_args)
-                            elif isinstance(self._func, types.FunctionType):
                                 res = self._func(some_id)
-                            else:
-                                res = self._func
+                        else:
+                            res = self._func
                     except Exception:
                         print(traceback.format_exc())
                         return 'Wrond arguments or lambda expression', False
@@ -196,7 +207,7 @@ class Control(object):
                     except Exception:
                         return 'Wrong arguments', False
                     else:
-                        if self._cmd_type == CommandType.INFO and res:
+                        if self._cmd_type == CommandType.INFO and isinstance(res, str):
                             return res, save
                         else:
                             return 'Success', save
@@ -208,8 +219,6 @@ class Control(object):
             self._actions = []
 
         def action(self, cmd_type, need_admin, args, func, glob=False):
-
-
             self._actions.append(Control.Command.Action(
                     self.command, cmd_type, need_admin, args, func, glob))
             return self
@@ -220,8 +229,16 @@ class Control(object):
                     return act.Do(command_string, some_id, admin)
             return 'Incorrect syntaxis', False
 
-        def get_help(self):
-            return [act.help for act in self._actions]
+        def get_help(self, admin):
+            if admin == AdminClass.GLOBAL:
+                ret = [act.help for act in self._actions]
+            elif admin == AdminClass.LOCAL:
+                ret = [act.help for act in self._actions
+                    if act.need_admin != AdminClass.GLOBAL]
+            else:
+                ret =[act.help for act in self._actions
+                    if act.need_admin == AdminClass.NONE]
+            return ret
 
 
     def __init__(self):
@@ -235,7 +252,8 @@ class Control(object):
     def execute(self, command_string, some_id, admin):
 
         if command_string == '/help':
-            hlp = ['/' + c.command + '\n' + c.description for c in self._commands]
+            hlp = ['/' + c.command + '\n' + c.description for c in self._commands
+                    if c.get_help(admin)]
             hlp.append('/help (command)\nGet help')
             hlp.sort()
             return '\n\n'.join(hlp), False
@@ -246,7 +264,7 @@ class Control(object):
                 )
             if cmd:
                 hlp = cmd.description + ':\n\n'
-                hlp += '\n'.join(cmd.get_help())
+                hlp += '\n'.join(cmd.get_help(admin))
                 return hlp, False
 
         if ' ' in command_string:
