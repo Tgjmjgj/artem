@@ -2,7 +2,7 @@
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
 ![Version](https://img.shields.io/badge/version-1.10.01-brightgreen.svg)
-![PyPI version](https://img.shields.io/badge/PyPI-v1.9.14-brightgreen.svg)
+![PyPI version](https://img.shields.io/badge/PyPI-v1.10.01-brightgreen.svg)
 ![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)
 ![License](https://img.shields.io/badge/license-apache-yellow.svg)
 
