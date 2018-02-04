@@ -9,6 +9,9 @@ import time
 from .scenario import *
 from .others import *
 
+DEFAULT_SESSION_DURATION = 30.0
+DEFAULT_ENABLED_SESSION = True
+DEFAULT_DISCOURSE_INTERVAL_MAX = 86400
 
 class DialogThread(threading.Thread):
 
@@ -21,9 +24,8 @@ class DialogThread(threading.Thread):
     # {"user_id": Thread class object}
     _sessions = {}
 
-    def __init__(self, some_id, postback_queue, lib,
-                interlocutors, logger, names, enabled_session,
-                session_duration, discourse_max, start):
+    def __init__(self, some_id, postback_queue, lib, interlocutors, logger,
+                 start, global_names, global_admins):
 
         threading.Thread.__init__(self)
         self.daemon = True
@@ -33,22 +35,38 @@ class DialogThread(threading.Thread):
         self.queue = queue.Queue()
         self.interlocutors = interlocutors
         self._logger = logger
-        self.enabled_session = enabled_session
-        self.session_duration = session_duration
-        self.discourse_interval_max = discourse_max
+        self.enabled_session = Wrap()
+        self.enabled_session.val = DEFAULT_ENABLED_SESSION
+        self.session_duration = Wrap()
+        self.session_duration.val = DEFAULT_SESSION_DURATION
+        self.discourse_interval_max = Wrap()
+        self.discourse_interval_max.val = DEFAULT_DISCOURSE_INTERVAL_MAX
         self._start = start
         self._run_scen = []
         self._run_post_scen = []
         self._sessions = {}
-        self.names = names.copy()
+        self.local_names = []
+        self.local_admins = []
         self.lib = copy.deepcopy(lib)
 
-    def run(self):
+        self._global_names = global_names
+        self._global_admins = global_admins
+        self._global_lib = lib
 
+    def restore(self, sessions, duration, discourse,
+                local_names, local_admins):
+        self.enabled_session.val = sessions
+        self.session_duration.val = duration
+        self.discourse_interval_max.val = discourse
+        if 'мот global' in local_names:
+            local_names.remove('мот global')
+        self.local_names = local_names
+        self.local_admins = local_admins
+
+    def run(self):
         try:
             if self._start:
-                self._run(Event.START,
-                                     msg=None, one=False)
+                self._run(Event.START, msg=None, one=False)
             self._activate_discourse()
         except:
             self._logger.error(traceback.format_exc())
@@ -72,19 +90,24 @@ class DialogThread(threading.Thread):
         name = None
         if len(self.interlocutors) > 1:
             if event == Event.ANSWER:
-                if sender_id in self._sessions and self.enabled_session:
+                if sender_id in self._sessions and self.enabled_session.val:
                     self._sessions[sender_id].cancel()
                     self._sessions[sender_id] = threading.Timer(
-                            self.session_duration,
+                            self.session_duration.val,
                             self._drop_session, {sender_id})
                     self._sessions[sender_id].start()
                 else: 
                     name = find_element(
-                            self.names, lambda nam: message.startswith(nam))
+                            self._global_names,
+                            lambda nam: message.startswith(nam))
+                    if not name:
+                        name = find_element(
+                                self.local_names,
+                                lambda nam: message.startswith(nam))
                     if name:
-                        if self.enabled_session:
+                        if self.enabled_session.val:
                             self._sessions[sender_id] = threading.Timer(
-                                    self.session_duration, 
+                                    self.session_duration.val, 
                                     self._drop_session, {sender_id})
                             self._sessions[sender_id].start()
                     else:
@@ -137,10 +160,8 @@ class DialogThread(threading.Thread):
         i = 0
         while i != len(run):
             if run[i][1].max_idle_time:
-                if ((datetime.datetime.now() - 
-                        run[i][1].time).seconds / 60 >= 
-                            run[i][1].max_idle_time
-                        ):
+                left_time = (datetime.datetime.now() - run[i][1].time).seconds / 60
+                if left_time >= run[i][1].max_idle_time:
                     run.remove(run[i])
                     i -= 1
             i += 1
@@ -159,8 +180,7 @@ class DialogThread(threading.Thread):
 
             else:
                 scen_info = self.lib[event][index - len(run)]
-                index += 1
-                is_suitable = scen_info.scn_type.suitable(
+                is_suit = scen_info.scn_type.suitable(
                         message, i_sender, self.interlocutors,
                         is_personal, name
                         )
@@ -169,11 +189,14 @@ class DialogThread(threading.Thread):
                             type(item[1]) == scen_info.scn_type and
                             item[0] == ('all' or sender_id)
                         )
-                if is_suitable and not find_run and scen_info.status == 'on':
-                    #print('run scenario ' + str(scen_info.scn_type))
+                index += 1
+                if (is_suit and not find_run and scen_info.status and
+                        self._global_lib[event][index - len(run) - 1].status):
+                    # print('run scenario ' + str(scen_info.scn_type))
                     scen = scen_info.scn_type()
                     scen.replic_count = 0
-                    set_env(scen, self.interlocutors, self.names)
+                    set_env(scen, self.interlocutors,
+                            self._global_names + self.local_names)
                     new_id = ('all' 
                             if not sender_id or scen.with_all
                             else sender_id
@@ -217,7 +240,7 @@ class DialogThread(threading.Thread):
 
 
     def _activate_discourse(self):
-        rnd_time = random.randint(10, self.discourse_interval_max)
+        rnd_time = random.randint(10, self.discourse_interval_max.val)
         #print('Random time: ' + str(rnd_time) + ' s.')
         timer = threading.Timer(rnd_time, self._discourse, {})
         timer.start()

@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='artem.proto',
   package='',
   syntax='proto3',
-  serialized_pb=_b('\n\x0b\x61rtem.proto\"\xdd\x02\n\nProtoArtem\x12\x0e\n\x06\x61\x64mins\x18\x01 \x03(\x05\x12&\n\x1e\x64\x65\x66\x61ult_discourse_interval_max\x18\x02 \x01(\x05\x12\x15\n\rdefault_names\x18\x03 \x03(\t\x12\x18\n\x10pooling_interval\x18\x04 \x01(\x02\x12 \n\x18\x64\x65\x66\x61ult_session_duration\x18\x05 \x01(\x02\x12\x18\n\x10\x64\x65\x66\x61ult_sessions\x18\x06 \x01(\x08\x12/\n\x0e\x64ialog_threads\x18\x07 \x03(\x0b\x32\x17.ProtoArtem.ProtoThread\x1ay\n\x0bProtoThread\x12\x0f\n\x07some_id\x18\x01 \x01(\x05\x12\x1e\n\x16\x64iscourse_interval_max\x18\x02 \x01(\x05\x12\r\n\x05names\x18\x03 \x03(\t\x12\x18\n\x10session_duration\x18\x04 \x01(\x02\x12\x10\n\x08sessions\x18\x05 \x01(\x08\x62\x06proto3')
+  serialized_pb=_b('\n\x0b\x61rtem.proto\"\x90\x02\n\nProtoArtem\x12\x15\n\rglobal_admins\x18\x01 \x03(\x05\x12\x14\n\x0cglobal_names\x18\x02 \x03(\t\x12\x18\n\x10pooling_interval\x18\x03 \x01(\x02\x12/\n\x0e\x64ialog_threads\x18\x04 \x03(\x0b\x32\x17.ProtoArtem.ProtoThread\x1a\x89\x01\n\x0bProtoThread\x12\x0f\n\x07some_id\x18\x01 \x01(\x05\x12\x1e\n\x16\x64iscourse_interval_max\x18\x02 \x01(\x05\x12\r\n\x05names\x18\x03 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x04 \x03(\x05\x12\x18\n\x10session_duration\x18\x05 \x01(\x02\x12\x10\n\x08sessions\x18\x06 \x01(\x08\x62\x06proto3')
 )
 
 
@@ -54,15 +54,22 @@ _PROTOARTEM_PROTOTHREAD = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='session_duration', full_name='ProtoArtem.ProtoThread.session_duration', index=3,
-      number=4, type=2, cpp_type=6, label=1,
+      name='admins', full_name='ProtoArtem.ProtoThread.admins', index=3,
+      number=4, type=5, cpp_type=1, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='session_duration', full_name='ProtoArtem.ProtoThread.session_duration', index=4,
+      number=5, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='sessions', full_name='ProtoArtem.ProtoThread.sessions', index=4,
-      number=5, type=8, cpp_type=7, label=1,
+      name='sessions', full_name='ProtoArtem.ProtoThread.sessions', index=5,
+      number=6, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -79,8 +86,8 @@ _PROTOARTEM_PROTOTHREAD = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=244,
-  serialized_end=365,
+  serialized_start=151,
+  serialized_end=288,
 )
 
 _PROTOARTEM = _descriptor.Descriptor(
@@ -91,50 +98,29 @@ _PROTOARTEM = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='admins', full_name='ProtoArtem.admins', index=0,
+      name='global_admins', full_name='ProtoArtem.global_admins', index=0,
       number=1, type=5, cpp_type=1, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='default_discourse_interval_max', full_name='ProtoArtem.default_discourse_interval_max', index=1,
-      number=2, type=5, cpp_type=1, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='default_names', full_name='ProtoArtem.default_names', index=2,
-      number=3, type=9, cpp_type=9, label=3,
+      name='global_names', full_name='ProtoArtem.global_names', index=1,
+      number=2, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='pooling_interval', full_name='ProtoArtem.pooling_interval', index=3,
-      number=4, type=2, cpp_type=6, label=1,
+      name='pooling_interval', full_name='ProtoArtem.pooling_interval', index=2,
+      number=3, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='default_session_duration', full_name='ProtoArtem.default_session_duration', index=4,
-      number=5, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='default_sessions', full_name='ProtoArtem.default_sessions', index=5,
-      number=6, type=8, cpp_type=7, label=1,
-      has_default_value=False, default_value=False,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='dialog_threads', full_name='ProtoArtem.dialog_threads', index=6,
-      number=7, type=11, cpp_type=10, label=3,
+      name='dialog_threads', full_name='ProtoArtem.dialog_threads', index=3,
+      number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -152,7 +138,7 @@ _PROTOARTEM = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=16,
-  serialized_end=365,
+  serialized_end=288,
 )
 
 _PROTOARTEM_PROTOTHREAD.containing_type = _PROTOARTEM

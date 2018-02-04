@@ -38,26 +38,25 @@ def run_scen(scen):
                 return [m(scen.answer)]
             return new_answers
 
+class EventMetaclass(enum.EnumMeta):
 
-'''def get_key_by_value(dic, val):
-    for key, value in dic.items():
-        if value == val:
-            return key'''
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            key = key.upper()
+        for item in self:
+            if item.name == key:
+                return item
+        return None
+        return super().__getitem__(key)
 
 
-class Event(enum.Enum):
+class Event(enum.Enum, metaclass=EventMetaclass):
     START = 1
     ADDFRIEND = 2
     ANSWER = 3
     POSTPROC = 4
     DISCOURSE = 5
 
-    @classmethod
-    def _missing_(cls, value):
-        for item in cls:
-            if item.name == value:
-                return item
-        return None
 
 
 class Lib(object):
@@ -86,7 +85,7 @@ class Lib(object):
             def __init__(self, scen_class_type, priority):
                 self.scn_type = scen_class_type
                 self._priority = priority
-                self.status = 'on'
+                self.status = True
 
             @property
             def scn_type(self):
@@ -106,8 +105,7 @@ class Lib(object):
 
             @status.setter
             def status(self, value):
-                value.lower()
-                if value == 'on' or value == 'off':
+                if isinstance(value, bool):
                     self._status = value
 
 
@@ -154,6 +152,8 @@ class Lib(object):
             self._all_scenarios.append(self.Scenarios(event))
 
     def _get_scenarios(self, event):
+        if isinstance(event, str):
+            event = Event[event.upper()]
         return find_element(self._all_scenarios, lambda s: s.event == event)
 
     def get_sceninfo(self, event, scn_name):
@@ -174,9 +174,9 @@ class Lib(object):
                 else False)
     
     def __getitem__(self, key):
-        if not key:
-            raise KeyError
-        elif not isinstance(key, Event):
+        if isinstance(key, str):
+            key = Event[key]
+        if not isinstance(key, Event):
             raise TypeError
         else:
             return self._get_scenarios(key)
@@ -277,3 +277,13 @@ class ToSend(object):
     def attach(self, value):
         self._attach = value
 
+
+class Wrap(object):
+
+    @property
+    def val(self):
+        return self._val
+
+    @val.setter
+    def val(self, value):
+        self._val = value

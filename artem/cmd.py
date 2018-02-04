@@ -1,343 +1,266 @@
 import re
 import enum
+import types
+import traceback
 
 from . import artem_core
+from .scenario import find_element
 
+class CommandType(enum.Enum):
+    INFO = 1
+    ADD_DEL = 2
+    ON_OFF = 3
+    SET = 4
+
+class ArgType(enum.Enum):
+    WORD = 1
+    WORDS = 2
+    INTEGER = 3
+    FLOAT = 4
+    STRING = 5
+    ON_OFF = 6
+    MESSAGE = 7
+
+class ArgRole(enum.Enum):
+    VALUE = 1
+    KEY = 2
+    ARG = 3
+    APPEND = 4
+    FUNC_ARG = 5
+
+class AdminClass(enum.Enum):
+    NONE = 1
+    LOCAL = 2
+    GLOBAL = 3
 
 class Control(object):
 
-    def __init__(self, artem):
-        self._artem = artem
+    class Command(object):
 
-    def execute(self, command, user_id, source_id):
-        answer = ''
-        need_save = False
-        if command == '/help':
-            answer = '''List of available commands:\n\n
-                /admins     (add|del [id])                  
-                    Information and administration of a group of admins\n
-                /discourse_interval (local) [number]        
-                    Get or set maximal time between two discourse\n
-                /events [event]                             
-                    Get information about event types and their scenarios\n
-                /help                                       
-                    Get help\n
-                /names      (add|del (local) [name])        
-                    Information and administration of Artem respond names\n
-                /pooling_interval   [number]                
-                    Get or set time between secondary 
-                    pooling (all except messages)\n    
-                /scenario (on|off (local)) [event] [name]   
-                    Enable or disable a specific scenario\n
-                /session_duration   [number]                
-                    Get or set duration of session\n
-                /sessions   (true|false (local))            
-                    Inclusions of sessions\n
-                /version                                    
-                    Information about Artem version\n'''
+        class Action(object):
 
-        elif command == '/version':
-            answer = ('ArtemCore v' + artem_core.VERSION + 
-                      '\nRelease: ' + artem_core.RELEASE)
+            command_pattern = {
+                CommandType.INFO: '',
+                CommandType.ADD_DEL: ' (add|del)',
+                CommandType.ON_OFF: ' (on|off)',
+                CommandType.SET: ' set'
+            }
 
-        elif re.match(
-                '^/pooling_interval( [0-9](.([0-9]){1,10}){0,1}){0,1}$',
-                command):
+            arg_pattern = {
+                ArgType.WORD: ' ([_a-zа-я]){1,20}',
+                ArgType.WORDS: ' ([_ a-zа-я](?!global)){1,40}',
+                ArgType.INTEGER: ' ([0-9]){1,10}',
+                ArgType.FLOAT: ' ([0-9]){1,5}(.([0-9]){1,10}){0,1}',
+                ArgType.STRING: ' ([_ a-zа-я0-9](?!global)){1,20}',
+                ArgType.ON_OFF: '',
+                ArgType.MESSAGE: '.+'
+            }
 
-            if command == '/pooling_interval':
-                answer = ('secondary_pooling_interval = ' + 
-                        str(self._artem._secondary_pooling_interval) + ' sec')
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                        ' does not have admin permissions')
-            else:
-                self._artem._secondary_pooling_interval = float(command[18:])
-                need_save = True
-                answer = ('secondary_pooling_interval was set on ' +
-                        str(self._artem._secondary_pooling_interval) + ' sec')
+            def __init__(self, command, cmd_type, need_admin, args, func, glob):
+                self._command = command
+                self._cmd_type = cmd_type
+                self._need_admin = need_admin
+                self._args = args
+                self._func = func
+                self._glob = glob
+                self._create_pattern()
 
-        elif re.match(
-                '^/admins( (add|del) ([0-9]){5,15}){0,1}$',
-                command):
+            def _create_pattern(self):
+                self.pattern = '^/' + self._command
+                self.pattern += self.command_pattern[self._cmd_type]
+                self.help = self.pattern[1:]
+                for arg in self._args:
+                    self.pattern += self.arg_pattern[arg[0]]
+                    if arg[0] != ArgType.ON_OFF:
+                        self.help += ' ' + arg[0].name
+                if self._glob:
+                    self.pattern += ' global'
+                    self.help += ' global'
+                if self._cmd_type != (ArgType.WORDS and ArgType.STRING):
+                    self.pattern += '$'
 
-            if command == '/admins':
-                answer = ('admins: ' + 
-                        ', '.join([str(a) for a in self._artem._admins]))
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                        ' does not have admin permissions')
-            elif 'add' in command:
-                new_id = int(command[12:])
-                if new_id in self._artem._admins:
-                    answer = ('User \"' + str(new_id) +
-                            '\" already admin')
-                else:
-                    self._artem._admins.append(new_id)
-                    need_save = True
-                    answer = ('User \"' + str(new_id) +
-                            '\" was added to admins group')
-            elif 'del' in command:
-                new_id = int(command[12:])
-                if new_id not in self._artem._admins:
-                    answer = ('User \"' + str(new_id) +
-                            '\" not in admins group')
-                else:
-                    self._artem._admins.remove(new_id)
-                    need_save = True
-                    answer = ('User \"' + str(new_id) +
-                            '\" was removed from admins group')
-
-        elif re.match(
-                '^/names( (add|del)( local){0,1} ([_ a-zа-я0-9]){1,20}){0,1}$',
-                command):
-
-            if command == '/names':
-                answer = ('Artem default names: ' +
-                        ', '.join(self._artem._names))
-                answer += ('\nArtem local names: ' +
-                           ', '.join(self._artem._dialog_threads[source_id]
-                                     .names))
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                    ' does not have admin permissions')
-            else:
-                new_name = (command[11:] if 'local' not in command 
-                        else command[17:])
-                if 'add' in command:
-                    if 'local' in command:
-                        if (new_name in
-                                self._artem._dialog_threads[source_id].names):
-                            answer = ('Artem already responded in current' +
-                                     'chat to the name of \"' +
-                                     new_name + '\"')
-                        else:
-                            (self._artem._dialog_threads[source_id]
-                                    .names.append(new_name))
-                            self._artem._dialog_threads[source_id].names.sort()
-                            need_save = True
-                            answer = ('Now you can call Artem \"' +
-                                    new_name + '\" in current chat')
-                    else:
-                        if new_name not in self._artem._names:
-                            self._artem._names.append(new_name)
-                            self._artem._names.sort()
-                        for id in self._artem._dialog_threads:
-                            if (new_name not in 
-                                    self._artem._dialog_threads[id].names):
-                                (self._artem._dialog_threads[id]
-                                        .names.append(new_name))
-                                self._artem._dialog_threads[id].names.sort()
-                        need_save = True
-                        answer = ('Now you can call Artem \"' +
-                                new_name + '\" anywhere')
-                else:
-                    if 'local' in command:
-                        if (new_name not in 
-                                self._artem._dialog_threads[source_id].names):
-                            answer = ('Artem not have name \"' +
-                                    new_name + '\" in local chat')
-                        else:
-                            (self._artem._dialog_threads[source_id]
-                                    .names.remove(new_name))
-                            need_save = True
-                            answer = ('Name \"' + new_name +
-                                    '\" was removed from Artem' +
-                                    ' names in current chat')
-                    else:
-                        if new_name in self._artem._names:
-                            self._artem._names.remove(new_name)
-                        for id in self._artem._dialog_threads:
-                            if (new_name in 
-                                    self._artem._dialog_threads[id].names):
-                                (self._artem._dialog_threads[id]
-                                        .names.remove(new_name))
-                        need_save = True
-                        answer = ('Name \"' + new_name +
-                                '\" was removed from Artem global names')
-
-        elif re.match(
-                '^/sessions(( local){0,1} (true|false)){0,1}$',
-                command):
-
-            if command == '/sessions':
-                default_s = ('enabled'
-                        if self._artem._default_enabled_session
-                        else 'disabled')
-                local_s = ('enabled' 
-                        if self._artem._dialog_threads[source_id].enabled_session
-                        else 'disabled')
-                answer = ('Default: Sessions ' + default_s +
-                        '\nLocal: Sessions ' + local_s)
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                        ' does not have admin permissions')
-            elif command == '/sessions true':
-                self._artem._default_enabled_session = True
-                for id in self._artem._dialog_threads:
-                    self._artem._dialog_threads[id].enabled_session = True
-                need_save = True
-                answer = 'Sessions are included everywhere'
-            elif command == '/sessions local true':
-                self._artem._dialog_threads[source_id].enabled_session = True
-                need_save = True
-                answer = 'Sessions are included in the local chat'
-            elif command == '/sessions false':
-                self._artem._default_enabled_session = False
-                for id in self._artem._dialog_threads:
-                    self._artem._dialog_threads[id].enabled_session = False
-                need_save = True
-                answer = 'Sessions are disabled everywhere'
-            else:
-                self._artem._dialog_threads[source_id].enabled_session = False
-                need_save = True
-                answer = 'Sessions are disabled in the local chat'
-
-        elif re.match(
-                '^/session_duration(( local){0,1} ([0-9]){1,5}(.([0-9]){1,3}){0,1}){0,1}$',
-                command):
+            @property
+            def pattern(self):
+                return self._pattern
                 
-            if command == '/session_duration':
-                answer = ('default session_duration = ' +
-                        self._artem._default_session_duration + ' sec\n')
-                answer += ('local session_duration = ' +
-                        (self._artem._dialog_threads[source_id]
-                            .session_duration) + ' sec')
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                        ' does not have admin permissions')
-            elif 'local' in command:
-                self._artem._dialog_threads[source_id].session_duration = (
-                        float(command[24:]))
-                need_save = True
-                answer = ('session_duration was set on ' +
-                        str(self._artem._dialog_threads[source_id]
-                            .session_duration) + ' sec in a local chat')
-            else:
-                new_dur = float(command[18:])
-                self._artem._default_session_duration = new_dur
-                for id in self._artem._dialog_threads:
-                    self._artem._dialog_threads[id].session_duration = new_dur
-                need_save = True
-                answer = ('session_duration was set on ' +
-                        str(new_dur) + ' sec in all chats')
+            @pattern.setter
+            def pattern(self, value):
+                self._pattern = value
 
-        elif re.match(
-                '^/discourse_interval(( local){0,1} ([0-9]){2,6}){0,1}$',
-                command):
-
-            if command == '/discourse_interval':
-                answer = ('default max_discourse_interval = ' +
-                        str(self._artem._default_discourse_interval_max) +
-                        ' sec\n')
-                answer += ('local max_discourse_interval = ' +
-                        str(self._artem._dialog_threads[source_id]
-                            .discourse_interval_max) + ' sec')
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                        ' does not have admin permissions')
-            elif 'local' in command:
-                (self._artem._dialog_threads[source_id]
-                        .discourse_interval_max) = float(command[26:])
-                need_save = True
-                answer = ('max_discourse_interval was set on ' +
-                        str(self._artem._dialog_threads[source_id]
-                            .discourse_interval_max) + 
-                        ' sec in a local chat')
-            else:
-                new_dur = float(command[20:])
-                self._artem._default_discourse_interval_max = new_dur
-                for id in self._artem._dialog_threads:
-                    self._artem._dialog_threads[id].discourse_interval_max = (
-                            new_dur)
-                need_save = True
-                answer = ('max_discourse_interval was set on ' +
-                        str(new_dur) + ' sec in all chats')
-        elif re.match(
-                '^/events( ([a-z]){4,15}){0,1}$',
-                command):
-
-            if command == '/events':
-                for event in Event:
-                    answer += (event.name + ': ' +
-                            str(len(self._artem._lib[event])) + ', ')
-                answer = answer[0:len(answer)-2]
-            else:
-                evt_name = command[8:].upper()
-                evt = Event[evt_name]
-                if evt:
-                    answer = (evt.name + ' scenarios:\n' +
-                        '  \n'.join(p.scn_type.__name__ 
-                                    for p in self._artem._lib[evt]))
+            def Do(self, cmd, some_id, admin):
+                if (self._need_admin == AdminClass.GLOBAL and
+                        admin != AdminClass.GLOBAL):
+                    answer = ('To allow this command you need global admin ' +
+                        'privileges')
+                    return answer, False
+                elif (self._need_admin == AdminClass.LOCAL and
+                        admin == AdminClass.NONE):
+                    answer = 'To allow this command you need admin privileges'
+                    return answer, False
                 else:
-                    answer = ('Invalid event name: \"' +
-                            evt_name + '\"(See /events)')
-
-        elif re.match(
-                '^/scenario( (on|off)( local){0,1}){0,1} ([a-z]){4,15} ([_a-zа-я0-9]){1,20}$',
-                command):
-
-            spl = command.split(' ')
-            evt_name = spl[len(spl)-2].upper()
-            evt = Event[evt_name]
-            if not evt:
-                answer = ('Invalid event name: \"' +
-                        evt_name + '\"(See /events)')
-            scn_name = spl[len(spl)-1]
-            if not self._artem._lib.exists(evt, scn_name):
-                answer = ('Event \"' + evt_name + '\" does not contain ' +
-                        'a scenario with name \"' + scn_name + '\"')
-            elif 'on' not in command and 'off' not in command:
-                answer = ('Default status: ' + 
-                        self._artem._lib.get_status(evt, scn_name))
-                answer += ('\nLocal status: ' + 
-                        self._artem._dialog_threads[source_id]
-                            .lib.get_status(evt, scn_name))
-            elif user_id not in self._artem._admins:
-                answer = ('User ' + str(user_id) +
-                        ' does not have admin permissions')
-            elif 'local' in command:
-                current_status = (self._artem._dialog_threads[source_id]
-                        .lib.get_status(evt, scn_name))
-                if 'on' in command:
-                    if current_status == 'on':
-                        answer = ('Scenario \"' + scn_name +
-                                '\" is already activated in a local chat')
+                    args_val = []
+                    l = len(self._command)
+                    if self._cmd_type == CommandType.INFO:
+                        begin = l + 1
+                        subcmd = None
                     else:
-                        (self._artem._dialog_threads[source_id]
-                                .lib.set_status(evt, scn_name, 'on'))
-                        need_save = True
-                        answer = ('Scenario \"' + scn_name +
-                                '\" now activated in a local chat')
-                else:
-                    if current_status == 'off':
-                        answer = ('Scenario \"' + scn_name +
-                                '\" is already deactivated in a local chat')
-                    else:
-                        (self._artem._dialog_threads[source_id]
-                                .lib.set_status(evt, scn_name, 'off'))
-                        (self._artem._dialog_threads[source_id]
-                                .stop_scenario(evt, scn_name))
-                        need_save = True
-                        answer = ('Scenario \"' + scn_name +
-                                '\" now deactivated in a local chat')
-            else:
-                new_status = 'on' if 'on' in command else 'off'
-                self._artem._lib.set_status(evt, scn_name, new_status)
-                for id in self._artem._dialog_threads:
-                    (self._artem._dialog_threads[id].lib
-                            .set_status(evt, scn_name, new_status))
-                    if new_status == 'off':
-                        (self._artem._dialog_threads[id]
-                                .stop_scenario(evt, scn_name))
-                need_save = True
-                if new_status == 'on':
-                    answer = ('Scenario \"' + scn_name +
-                            '\" is activated in all chats')
-                else:
-                    answer = ('Scenario \"' + scn_name +
-                            '\" is deactivated in all chats')
+                        subcmd = cmd[l + 2 : l + 5]
+                    if self._cmd_type == CommandType.ADD_DEL:
+                        begin = l + 5
+                    elif self._cmd_type == CommandType.ON_OFF:
+                        begin = l + (4 if cmd[l + 2 : l + 4] == 'on' else 5)
+                    elif self._cmd_type == CommandType.SET:
+                        begin = l + 5
+                        
+                    for arg in self._args:
+                        if arg[0] != ArgType.ON_OFF:
+                            cmd = cmd[begin:]
+                            if cmd.startswith(' global'):
+                                break
+                            reg = re.match(self.arg_pattern[arg[0]], cmd)
+                            beg = reg.regs[0][0]
+                            val = cmd[beg : beg + reg.regs[0][1]]
+                            begin = len(val)
+                            val = val[1:]
+                            if arg[0] == ArgType.FLOAT:
+                                val = float(val)
+                            elif arg[0] == ArgType.INTEGER:
+                                val = int(val)
+                            args_val.append([val, arg[1]])
+                        else:
+                            args_val.append([
+                                    True if subcmd[0:2] == 'on' else False,
+                                    arg[1]
+                                ])
+                    res = None
+                    func_args = [
+                        a[0] for a in args_val if a[1] == ArgRole.FUNC_ARG
+                        ]
+                    try:
+                        if self._glob:
+                            if func_args:
+                                res = self._func(*func_args)
+                            elif isinstance(self._func, types.FunctionType):
+                                res = self._func()
+                            else:
+                                res = self._func
+                        else:
+                            if func_args:
+                                res = self._func(some_id, *func_args)
+                            elif isinstance(self._func, types.FunctionType):
+                                res = self._func(some_id)
+                            else:
+                                res = self._func
+                    except Exception:
+                        print(traceback.format_exc())
+                        return 'Wrond arguments or lambda expression', False
 
+                    if self._cmd_type == CommandType.INFO:
+                        save = False
+                    else:
+                        save = True
+                    try:
+                        fargs = []
+                        for i in range(0, len(args_val)):
+                            if args_val[i][1] == ArgRole.ARG:
+                                fargs.append(args_val[i][0])
+                                if i != len(args_val) - 1:
+                                    if args_val[i + 1][1] != ArgRole.ARG:
+                                        res = res(*fargs)
+                                else:
+                                    res = res(*fargs)
+                            elif args_val[i][1] == ArgRole.KEY:
+                                if i != len(args_val) - 1:
+                                    if args_val[i + 1][1] == ArgRole.VALUE:
+                                        res[args_val[i][0]] = args_val[i+1][0]
+                                        break
+                                res = res[args_val[i][0]]
+                            elif args_val[i][1] == ArgRole.VALUE:
+                                res.val = args_val[i][0]
+                                break
+                            elif args_val[i][1] == ArgRole.APPEND:
+                                have = (True if find_element(
+                                        res, lambda n: n == args_val[i][0])
+                                    else False)
+                                if not have and subcmd == 'add':
+                                    res.append(args_val[i][0])
+                                elif have and subcmd == 'del':
+                                    res.remove(args_val[i][0])
+                                elif not have and subcmd == 'del':
+                                    return (args_val[i][0] +
+                                    ' is not in the list'), False
+                                else:
+                                    return (args_val[i][0] +
+                                    ' already in the list'), False
+                                break
+                    except Exception:
+                        return 'Wrong arguments', False
+                    else:
+                        if self._cmd_type == CommandType.INFO and res:
+                            return res, save
+                        else:
+                            return 'Success', save
+
+
+        def __init__(self, command_name, help_):
+            self.command = command_name
+            self.description = help_
+            self._actions = []
+
+        def action(self, cmd_type, need_admin, args, func, glob=False):
+
+
+            self._actions.append(Control.Command.Action(
+                    self.command, cmd_type, need_admin, args, func, glob))
+            return self
+
+        def execute(self, command_string, some_id, admin):
+            for act in self._actions:
+                if re.match(act.pattern, command_string):
+                    return act.Do(command_string, some_id, admin)
+            return 'Incorrect syntaxis', False
+
+        def get_help(self):
+            return [act.help for act in self._actions]
+
+
+    def __init__(self):
+        self._commands = []
+
+    def add(self, command_name, help_):
+        new_cmd = Control.Command(command_name, help_)
+        self._commands.append(new_cmd)
+        return new_cmd
+
+    def execute(self, command_string, some_id, admin):
+
+        if command_string == '/help':
+            hlp = ['/' + c.command + '\n' + c.description for c in self._commands]
+            hlp.append('/help (command)\nGet help')
+            hlp.sort()
+            return '\n\n'.join(hlp), False
+        elif re.match('^/help ([_a-zа-я]){1,20}$', command_string):
+            cmd = find_element(
+                    self._commands,
+                    lambda c: c.command == command_string[6:]
+                )
+            if cmd:
+                hlp = cmd.description + ':\n\n'
+                hlp += '\n'.join(cmd.get_help())
+                return hlp, False
+
+        if ' ' in command_string:
+            for index in range(1, len(command_string)):
+                if command_string[index] == ' ':
+                    break
+            command_name = command_string[1:index]
         else:
-            answer = 'Unknown commands or incorrect syntaxis'
+            command_name = command_string[1:]
+        cmd = find_element(self._commands, 
+                           lambda cmd: cmd.command == command_name)
+        if cmd:
+            answer, save = cmd.execute(command_string, some_id, admin)
+        else:
+            answer, save = 'Unknown command', False
+        return answer, save
 
-        return need_save, answer
