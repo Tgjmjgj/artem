@@ -19,7 +19,7 @@ from .others import *
 from .scenario import Scenario, wrapup
 from .cmd import *
 
-VERSION = '1.9.16'
+VERSION = '1.10.01'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
