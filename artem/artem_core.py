@@ -20,7 +20,7 @@ from .others import *
 from .scenario import Scenario, wrap_respond, wrap_suitable
 from .cmd import *
 
-VERSION = '1.11.01'
+VERSION = '1.11.02'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
@@ -566,7 +566,7 @@ class Artem(object):
                 self._resume_artem,
                 glob=True
             )
-        self._cmd.add('sleep','Stop Artem for a while'
+        self._cmd.add('sleep', 'Stop Artem for a while'
             ).action(
                 CommandType.INFO,
                 AdminClass.LOCAL,
@@ -579,6 +579,18 @@ class Artem(object):
                 [[ArgType.INTEGER, ArgRole.FUNC_ARG]],
                 self._sleep_artem,
                 glob=True
+            )
+        self._cmd.add('status', 'Information on the health of Artem'
+            ).action(
+                CommandType.INFO,
+                AdminClass.NONE,
+                [],
+                lambda some_id:
+                    ('Local status: ' + 
+                    ('RUNNING' if self._dialog_threads[some_id][1]
+                        else 'SUSPENDED') +
+                    '\nGlobal status: ' +
+                    ('RUNNING' if self._run else 'SUSPENDED'))
             )
 
     def _stop_artem(self, some_id=None):
