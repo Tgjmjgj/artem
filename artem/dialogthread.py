@@ -58,8 +58,6 @@ class DialogThread(threading.Thread):
         self.enabled_session.val = sessions
         self.session_duration.val = duration
         self.discourse_interval_max.val = discourse
-        if 'мот global' in local_names:
-            local_names.remove('мот global')
         self.local_names = local_names
         self.local_admins = local_admins
 
@@ -104,13 +102,13 @@ class DialogThread(threading.Thread):
                     self._sessions[sender_id].cancel()
                     self._sessions[sender_id] = threading.Timer(
                         self.session_duration.val,
-                        self._drop_session, {sender_id}
+                        self.drop_session, {sender_id}
                         )
                     self._sessions[sender_id].start()
                 elif name and self.enabled_session.val:
                     self._sessions[sender_id] = threading.Timer(
                         self.session_duration.val, 
-                        self._drop_session, {sender_id}
+                        self.drop_session, {sender_id}
                         )
                     self._sessions[sender_id].start()
                 else:
@@ -262,7 +260,7 @@ class DialogThread(threading.Thread):
         finally:
             self._activate_discourse()
 
-    def _drop_session(self, user_id):
+    def drop_session(self, user_id):
         try:
             if user_id in self._sessions:
                 del self._sessions[user_id]

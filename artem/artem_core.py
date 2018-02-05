@@ -284,8 +284,11 @@ class Artem(object):
                         if event.text.startswith('/'):
                             self._commands(event.text.lower(), 
                                            event.user_id, some_id)
-                        elif self._run:
-                            if self._dialog_threads[some_id][1]:
+                        elif self._run and self._dialog_threads[some_id][1]:
+                            if event.text.startswith('.'):
+                                (self._dialog_threads[some_id][0]
+                                    .drop_session(event.user_id))
+                            else: 
                                 (self._dialog_threads[some_id][0].
                                     queue.put(
                                         Envelope(
