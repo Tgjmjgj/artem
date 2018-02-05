@@ -88,30 +88,33 @@ class DialogThread(threading.Thread):
         sender_id = msg.sender_id if msg else None
         is_personal = True
         name = None
+        if message:
+            name = find_element(
+                self._global_names,
+                lambda nam: message.startswith(nam)
+            )
+            if not name:
+                name = find_element(
+                    self.local_names,
+                    lambda nam: message.startswith(nam)
+                    )
         if len(self.interlocutors) > 1:
             if event == Event.ANSWER:
                 if sender_id in self._sessions and self.enabled_session.val:
                     self._sessions[sender_id].cancel()
                     self._sessions[sender_id] = threading.Timer(
-                            self.session_duration.val,
-                            self._drop_session, {sender_id})
+                        self.session_duration.val,
+                        self._drop_session, {sender_id}
+                        )
                     self._sessions[sender_id].start()
-                else: 
-                    name = find_element(
-                            self._global_names,
-                            lambda nam: message.startswith(nam))
-                    if not name:
-                        name = find_element(
-                                self.local_names,
-                                lambda nam: message.startswith(nam))
-                    if name:
-                        if self.enabled_session.val:
-                            self._sessions[sender_id] = threading.Timer(
-                                    self.session_duration.val, 
-                                    self._drop_session, {sender_id})
-                            self._sessions[sender_id].start()
-                    else:
-                        is_personal = False
+                elif name and self.enabled_session.val:
+                    self._sessions[sender_id] = threading.Timer(
+                        self.session_duration.val, 
+                        self._drop_session, {sender_id}
+                        )
+                    self._sessions[sender_id].start()
+                else:
+                    is_personal = False
 
         def answer_handler(answers):
             for ans in answers:
@@ -133,10 +136,11 @@ class DialogThread(threading.Thread):
                     #print(postproc_answers)
                     for i in range(0, len(postproc_answers)):
                         send = ToSend(
-                                self.some_id,
-                                postproc_answers[i]['message'],
-                                postproc_answers[i]['attach'],
-                                postproc_answers[i]['sticker'])
+                            self.some_id,
+                            postproc_answers[i]['message'],
+                            postproc_answers[i]['attach'],
+                            postproc_answers[i]['sticker']
+                            )
                         if i == 0:
                             if not postproc_answers[0]['attach']:
                                 send.attach = attach
@@ -154,9 +158,9 @@ class DialogThread(threading.Thread):
                      name, handler, answer=None, one=True):
 
         i_sender = find_element(
-                self.interlocutors,
-                lambda i: i.id == sender_id
-                )
+            self.interlocutors,
+            lambda i: i.id == sender_id
+            )
         if event == Event.POSTPROC:
             run = self._run_post_scen
         else:

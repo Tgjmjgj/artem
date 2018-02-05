@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import threading
+import requests
 import json
 import re
 import traceback
@@ -19,7 +20,7 @@ from .others import *
 from .scenario import Scenario, wrap_respond, wrap_suitable
 from .cmd import *
 
-VERSION = '1.10.02'
+VERSION = '1.11.01'
 RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
@@ -210,15 +211,18 @@ class Artem(object):
             self._logger.error(traceback.format_exc())
 
     def _send_listener(self):
-        while True:
-            try:
+        upload = vk_api.VkUpload(self._vk)
+        session = requests.Session()
+        try:
+            while True:
                 answer = self._send_queue.get()
                 if answer.attach:
                     if answer.attach.startswith('http'):
-                        url = self._vk.method('photos.getMessagesUploadServer')['upload_url']
-                        response = self._vk.http.post(url, answer.attach)
-                        print(response)
-                    
+                        image = session.get(answer.attach, stream=True)
+                        photo = upload.photo_messages(photos=image.raw)[0]
+                        answer.attach = 'photo{}_{}'.format(
+                            photo['owner_id'], photo['id']
+                            )
                 whose_id = 'chat_id' if answer.id < CHAT_ID_MAX else 'user_id'
                 self._vk.method(
                         'messages.send',
@@ -229,13 +233,12 @@ class Artem(object):
                             'sticker_id': answer.sticker
                         }
                     )
-            except Exception:
-                self._logger.error(traceback.format_exc())
+        except Exception:
+            self._logger.error(traceback.format_exc())
 
     def _newfriend_polling(self):
-
-        while True:
-            try:
+        try:
+            while True:
                 response = self._vk.method(
                         'friends.getRequests',
                         {'count': 100, 'out': 0,
@@ -256,9 +259,8 @@ class Artem(object):
                                     item['user_id'], None)
                                 ))
                 time.sleep(self._secondary_polling_interval.val)
-
-            except Exception:
-                self._logger.error(traceback.format_exc())
+        except Exception:
+            self._logger.error(traceback.format_exc())
 
     def alive(self):
 

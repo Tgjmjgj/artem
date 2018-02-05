@@ -84,8 +84,8 @@ def remove_name(message, name):
         return None
     message = message.replace(name, '', 1)
     if len(message) != 0:
-        message.lstrip()
+        message = message.lstrip()
         if message[0] == ',' or message[0] == '.' or message == '!':
             message = message[1:len(message)]
-        message.lstrip()
+        message = message.lstrip()
     return message
