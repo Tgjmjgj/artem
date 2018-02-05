@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='artem.proto',
   package='',
   syntax='proto3',
-  serialized_pb=_b('\n\x0b\x61rtem.proto\"\x90\x02\n\nProtoArtem\x12\x15\n\rglobal_admins\x18\x01 \x03(\x05\x12\x14\n\x0cglobal_names\x18\x02 \x03(\t\x12\x18\n\x10pooling_interval\x18\x03 \x01(\x02\x12/\n\x0e\x64ialog_threads\x18\x04 \x03(\x0b\x32\x17.ProtoArtem.ProtoThread\x1a\x89\x01\n\x0bProtoThread\x12\x0f\n\x07some_id\x18\x01 \x01(\x05\x12\x1e\n\x16\x64iscourse_interval_max\x18\x02 \x01(\x05\x12\r\n\x05names\x18\x03 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x04 \x03(\x05\x12\x18\n\x10session_duration\x18\x05 \x01(\x02\x12\x10\n\x08sessions\x18\x06 \x01(\x08\x62\x06proto3')
+  serialized_pb=_b('\n\x0b\x61rtem.proto\"\x90\x02\n\nProtoArtem\x12\x15\n\rglobal_admins\x18\x01 \x03(\x05\x12\x14\n\x0cglobal_names\x18\x02 \x03(\t\x12\x18\n\x10polling_interval\x18\x03 \x01(\x02\x12/\n\x0e\x64ialog_threads\x18\x04 \x03(\x0b\x32\x17.ProtoArtem.ProtoThread\x1a\x89\x01\n\x0bProtoThread\x12\x0f\n\x07some_id\x18\x01 \x01(\x05\x12\x1e\n\x16\x64iscourse_interval_max\x18\x02 \x01(\x05\x12\r\n\x05names\x18\x03 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x04 \x03(\x05\x12\x18\n\x10session_duration\x18\x05 \x01(\x02\x12\x10\n\x08sessions\x18\x06 \x01(\x08\x62\x06proto3')
 )
 
 
@@ -112,7 +112,7 @@ _PROTOARTEM = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='pooling_interval', full_name='ProtoArtem.pooling_interval', index=2,
+      name='polling_interval', full_name='ProtoArtem.polling_interval', index=2,
       number=3, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,

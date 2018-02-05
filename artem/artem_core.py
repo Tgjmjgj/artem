@@ -24,7 +24,7 @@ RELEASE = 'Artem3000'
 
 SERIALIZE_FILE = 'dialogs.art'
 CHAT_ID_MAX = 10000
-DEFAULT_POOLING_INTERVAL = 10.0
+DEFAULT_POLLING_INTERVAL = 10.0
 
 if not os.path.exists('log'):
     os.makedirs('log')
@@ -44,8 +44,8 @@ class Artem(object):
         self._dialog_threads = {} 
         self._restore = restore
         self._global_admins = admins
-        self._secondary_pooling_interval = Wrap()
-        self._secondary_pooling_interval.val = DEFAULT_POOLING_INTERVAL
+        self._secondary_polling_interval = Wrap()
+        self._secondary_polling_interval.val = DEFAULT_POLLING_INTERVAL
         self._send_queue = queue.Queue()
         self._run = True
         
@@ -167,7 +167,7 @@ class Artem(object):
                 art.global_admins.append(admin)
             for name in self._global_names:
                 art.global_names.append(name)
-            art.pooling_interval = self._secondary_pooling_interval.val
+            art.polling_interval = self._secondary_polling_interval.val
             for id_ in self._dialog_threads:
                 thr = art.dialog_threads.add()
                 thr.some_id = id_
@@ -195,7 +195,7 @@ class Artem(object):
 
             self._global_admins = [admin for admin in art.global_admins]
             self._global_names = [name for name in art.global_names]
-            self._secondary_pooling_interval.val = art.pooling_interval
+            self._secondary_polling_interval.val = art.polling_interval
             for thr in art.dialog_threads:
                 self._create_dialog_thread(thr.some_id, start=True)
                 self._dialog_threads[thr.some_id][0].restore(
@@ -232,7 +232,7 @@ class Artem(object):
             except Exception:
                 self._logger.error(traceback.format_exc())
 
-    def _newfriend_pooling(self):
+    def _newfriend_polling(self):
 
         while True:
             try:
@@ -255,7 +255,7 @@ class Artem(object):
                                     Event.ADDFRIEND,
                                     item['user_id'], None)
                                 ))
-                time.sleep(self._secondary_pooling_interval.val)
+                time.sleep(self._secondary_polling_interval.val)
 
             except Exception:
                 self._logger.error(traceback.format_exc())
@@ -263,14 +263,14 @@ class Artem(object):
     def alive(self):
 
         threading.Thread(target=self._send_listener).start()
-        threading.Thread(target=self._newfriend_pooling).start()
+        threading.Thread(target=self._newfriend_polling).start()
         if self._restore:
             self._deserialize()
 
         while True:
             try:
-                longpool = VkLongPoll(self._vk)
-                for event in longpool.listen():
+                longpoll = VkLongPoll(self._vk)
+                for event in longpoll.listen():
                     if (event.type == VkEventType.MESSAGE_NEW and
                             not event.from_me):
 
@@ -354,21 +354,21 @@ class Artem(object):
                     self._lib.set_status,
                 glob=True
             )
-        self._cmd.add('pooling_interval',
-            'Get or set time between secondary pooling (all except messages)'
+        self._cmd.add('polling_interval',
+            'Get or set time between secondary polling (all except messages)'
             ).action(
                 CommandType.INFO,
                 AdminClass.NONE,
                 [],
                 lambda some_id:
-                    ('Secondary pooling interval = ' +
-                        str(self._secondary_pooling_interval.val) + ' sec')
+                    ('Secondary polling interval = ' +
+                        str(self._secondary_polling_interval.val) + ' sec')
             ).action(
                 CommandType.SET,
                 AdminClass.GLOBAL,
                 [[ArgType.FLOAT, ArgRole.VALUE]],
                 lambda some_id:
-                    self._secondary_pooling_interval
+                    self._secondary_polling_interval
             )
         self._cmd.add('admins',
             'Information and administration of a group of admins'

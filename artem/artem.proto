@@ -3,7 +3,7 @@ syntax = "proto3";
 message ProtoArtem {
     repeated int32 global_admins = 1;
     repeated string global_names = 2;
-    float pooling_interval = 3;
+    float polling_interval = 3;
 
     message ProtoThread {
         int32 some_id = 1;
