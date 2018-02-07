@@ -119,7 +119,6 @@ class DialogThread(threading.Thread):
                 if ans['message'] == '':
                     continue
                 else:
-                    time.sleep(ans['sleep'])
                     postproc_answers = self._find_answer(
                         Event.POSTPROC,
                         sender_id, message, is_personal, name,
@@ -136,16 +135,17 @@ class DialogThread(threading.Thread):
                         send = ToSend(
                             self.some_id,
                             postproc_answers[i]['message'],
+                            postproc_answers[i]['sleep'],
                             postproc_answers[i]['attach'],
                             postproc_answers[i]['sticker']
                             )
+                        if postproc_answers[i]['sleep'] == 0.0:
+                            send.sleep = ans['sleep']
                         if i == 0:
                             if not postproc_answers[0]['attach']:
                                 send.attach = attach
                             if not postproc_answers[0]['sticker']:
                                 send.sticker = sticker
-                        else:
-                            time.sleep(postproc_answers[i]['sleep'])
                         self._postback_queue.put(send)
             return answers, False
 

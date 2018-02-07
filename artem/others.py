@@ -1,41 +1,86 @@
 import enum
+import random
 
 from .scenario import *
 
+def _if_dict(new_answer, nosleep=False):
+    if not 'message' in new_answer:
+        new_answer['message'] = ''
+    if not 'sleep' in new_answer:
+        if nosleep:
+            new_answer['sleep'] = 0.0
+        else:
+            new_answer['sleep'] = 1 + 5 * round(random.random(), 3)
+    if not 'attach' in new_answer:
+        new_answer['attach'] = None
+    if not 'sticker' in new_answer:
+        new_answer['sticker'] = None
+
 def run_scen(scen):
-    if not isinstance(scen, Scenario):
-        return None
     new_answers = scen.respond()
     if not scen.answer:
         if not new_answers:
-            return [m('')]
-        elif type(new_answers) == str:
+            new_answers = [m('')]
+        elif isinstance(new_answers, str):
             new_answers = [m(new_answers)]
-        for answer in new_answers:
-            if  not ('message' in answer and 'sleep' in answer and 
-                    'attach' in answer and 'sticker' in answer):
-                return [m('')]
+        elif isinstance(new_answers, dict):
+            _if_dict(new_answers)
+            new_answers = [new_answers]
+        elif isinstance(new_answers, list):
+            for i in range(0, len(new_answers)):
+                if isinstance(new_answers[i], str):
+                    new_answers[i] = m(new_answers[i])
+                elif isinstance(new_answers[i], list):
+                    try:
+                        new_answers[i] = m(*new_answers[i])
+                    except Exception:
+                        new_answers[i] = m('')
+                elif isinstance(new_answers[i], dict):
+                    _if_dict(new_answers[i])
+                else:
+                    raise Exception('Incorrect answer type from scenario ' + 
+                        str(type(scen)) + ' :  ' + str(new_answers))
+        else:
+            raise Exception('Incorrect answer type from scenario ' + 
+                str(type(scen)) + ' :  ' + str(new_answers))
         if scen.message:
             scen.messages_history.append(scen.message)
-        return new_answers
     else:
         if not new_answers:
-            return [m(scen.answer)]
-        elif type(new_answers) == str:
+            new_answers = [m(scen.answer)]
+        elif isinstance(new_answers, str):
             if new_answers == '':
                 new_answers = [m(scen.answer)]
             else:
                 new_answers = [m(new_answers)]
-            return new_answer
+        elif isinstance(new_answers, dict):
+            _if_dict(new_answers, nosleep=True)
+            if new_answers['message'] == '':
+                new_answers['message'] = scen.answer
+            new_answers = [new_answers]
+        elif isinstance(new_answers, list):
+            for i in range(0, len(new_answers)):
+                if isinstance(new_answers[i], str):
+                    if new_answers[i] == '':
+                        new_answers[i] = m(scen.answer)
+                    else:
+                        new_answers[i] = m(new_answers[i])
+                elif isinstance(new_answers[i], list):
+                    try:
+                        new_answers[i] = m(*new_answers[i])
+                    except Exception:
+                        new_answers[i] = m(scen.answer)
+                elif isinstance(new_answers[i], dict):
+                    _if_dict(new_answers[i], nosleep=True)
+                    if new_answers[i]['message'] == '':
+                        new_answers[i]['message'] = scen.answer
+                else:
+                    raise Exception('Incorrect answer type from scenario ' + 
+                        str(type(scen)) + ' :  ' + str(new_answers))
         else:
-            try:
-                for answer in new_answers:
-                    if not ('message' in answer and 'sleep' in answer and
-                            'attach' in answer and 'sticker' in answer):
-                        return [m(scen.answer)]
-            except Exception:
-                return [m(scen.answer)]
-            return new_answers
+            raise Exception('Incorrect answer type from scenario ' + 
+                str(type(scen)) + ' :  ' + str(new_answers))   
+    return new_answers
 
 class EventMetaclass(enum.EnumMeta):
 
@@ -246,9 +291,12 @@ class Envelope(object):
 
 class ToSend(object):
 
-    def __init__(self, some_id, message,
+    def __init__(self, id, message, sleep=0.0,
                  attachment=None, sticker=None):
-        self.id = some_id
+        self.id = id
+        if sleep == 0.0:
+            sleep = 1.0 + 5 * round(random.random(), 3)
+        self.sleep = sleep
         self.message = message
         self.attach = attachment
         self.sticker = sticker
@@ -268,6 +316,14 @@ class ToSend(object):
     @message.setter
     def message(self, value):
         self._message = value
+
+    @property
+    def sleep(self):
+        return self._sleep
+
+    @sleep.setter
+    def sleep(self, value):
+        self._sleep = value
 
     @property
     def attach(self):

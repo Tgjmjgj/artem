@@ -1,5 +1,7 @@
 import random
 
+
+
 class Scenario(object):
 
     # list of others.interlocutor

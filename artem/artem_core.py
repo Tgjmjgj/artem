@@ -223,7 +223,9 @@ class Artem(object):
                         answer.attach = 'photo{}_{}'.format(
                             photo['owner_id'], photo['id']
                             )
+                        answer.sleep = 0.0
                 whose_id = 'chat_id' if answer.id < CHAT_ID_MAX else 'user_id'
+                time.sleep(answer.sleep)
                 self._vk.method(
                         'messages.send',
                         {
@@ -539,7 +541,7 @@ class Artem(object):
                  [ArgType.MESSAGE, ArgRole.FUNC_ARG]],
                 lambda some_id, *args:
                     self._send_queue.put(ToSend(
-                        args[0], args[1][0].upper() + args[1][1:]))
+                        args[0], args[1][0].upper() + args[1][1:], 2.0))
             )
         self._cmd.add('stop', 'Stop responding to incoming messages'
             ).action(
