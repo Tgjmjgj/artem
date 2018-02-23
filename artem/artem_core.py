@@ -10,6 +10,7 @@ import sys
 import types
 import time
 import os
+from functools import reduce
 
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
@@ -45,8 +46,7 @@ class Artem(object):
         self._dialog_threads = {} 
         self._restore = restore
         self._global_admins = admins
-        self._secondary_polling_interval = Wrap()
-        self._secondary_polling_interval.val = DEFAULT_POLLING_INTERVAL
+        self._secondary_polling_interval = Wrap(DEFAULT_POLLING_INTERVAL)
         self._send_queue = queue.Queue()
         self._run = True
         
@@ -65,39 +65,27 @@ class Artem(object):
         self._global_names = sorted(names)
 
     def on(self, event, scen=None, prior=0, handler=None, suitable=None):
-
         try:
-            if handler:
-                if not (isinstance(handler, types.FunctionType) or
-                        isinstance(handler, types.BuiltinFunctionType) or
-                        isinstance(handler, types.MethodType) or
-                        isinstance(handler, types.BuiltinMethodType) or
-                        isinstance(handler, str)):
-                    raise TypeError('Handler must be function or str value')
-                elif suitable:
-                    if not (isinstance(suitable, types.FunctionType) or
-                            isinstance(suitable, types.BuiltinFunctionType) or
-                            isinstance(suitable, types.MethodType) or
-                            isinstance(suitable, types.BuiltinMethodType) or
-                            isinstance(suitable, str)):
-                        raise TypeError('Suitable must be function or str value')
-                scen = type(
-                        'Scenario' + str(id(handler)),
-                        (Scenario,),
-                        {'respond': wrap_respond(handler),
-                            'suitable': wrap_suitable(suitable)}
-                    )
-
+            scen = make_scen(scen, handler, suitable)
             self._lib.add(event, scen, prior)
             for id_ in self._dialog_threads:
                 (self._dialog_threads[id_][0].lib.add(
                         event, scen, prior))
-
+            return scen
         except Exception:
             self._logger.error(traceback.format_exc())
 
-    def _create_logger(self):
+    def onTimeEvent(self, ,
+                    scen=None, prior=0, handler=None):
+        try:
+            scn = self.on('TIME', scen, prior, handler)
+            self._lib.new_time_event(subevent, interval, dispersion)
+        except Exception:
+            if scn:
+                self._lib.remove('TIME', scn)
+            self._logger.error(traceback.format_exc())
 
+    def _create_logger(self):
         self._logger = logging.getLogger()
         self._logger.setLevel(logging.INFO)
         handler = logging.handlers.RotatingFileHandler(
@@ -109,7 +97,6 @@ class Artem(object):
         self._logger.addHandler(handler)
 
     def _vk_init(self, login, password, twofact_auth):
-
         try:
             if not twofact_auth:
                 self._vk = vk_api.VkApi(login, password)
@@ -125,7 +112,6 @@ class Artem(object):
             self._logger.error(traceback.format_exc())
 
     def _get_interlocutors(self, some_id): 
-
             if some_id < CHAT_ID_MAX:
                 response = self._vk.method(
                         'messages.getChat',
@@ -148,17 +134,21 @@ class Artem(object):
                          )]
             return inters
 
-    def _create_dialog_thread(self, some_id, start=False):
+    def _create_dialog_thread(self, some_id):
 
         if some_id not in self._dialog_threads:
             dialog_thread = DialogThread(
-                    some_id, self._send_queue, self._lib,
-                    self._get_interlocutors(some_id), self._logger,
-                    start, self._global_names, self._global_admins
-                )
+                some_id,
+                self._send_queue,
+                self._lib,
+                self._get_interlocutors(some_id),
+                self._logger,
+                self._global_names,
+                self._global_admins
+            )
             dialog_thread.start()
             self._dialog_threads[some_id] = [dialog_thread, True]
-            if not start and self._restore:
+            if self._restore:
                 self._serialize()
 
     def _serialize(self):
@@ -198,9 +188,10 @@ class Artem(object):
             self._global_names = [name for name in art.global_names]
             self._secondary_polling_interval.val = art.polling_interval
             for thr in art.dialog_threads:
-                self._create_dialog_thread(thr.some_id, start=True)
+                self._create_dialog_thread(thr.some_id)
                 self._dialog_threads[thr.some_id][0].restore(
-                        thr.sessions, thr.session_duration,
+                        thr.sessions,
+                        thr.session_duration,
                         thr.discourse_interval_max,
                         [name for name in thr.names], 
                         [admin for admin in thr.admins]
@@ -256,10 +247,12 @@ class Artem(object):
                         if item['user_id'] not in self._dialog_threads:
                             self._create_dialog_thread(item['user_id'])
                         (self._dialog_threads[item['user_id']][0]
-                                .queue.put(Envelope(
-                                    Event.ADDFRIEND,
-                                    item['user_id'], None)
-                                ))
+                            .queue.put(Envelope(
+                                Event.ADDFRIEND,
+                                item['user_id'],
+                                None
+                            ))
+                        )
                 time.sleep(self._secondary_polling_interval.val)
         except Exception:
             self._logger.error(traceback.format_exc())
@@ -270,7 +263,8 @@ class Artem(object):
         threading.Thread(target=self._newfriend_polling).start()
         if self._restore:
             self._deserialize()
-
+        for thr in self._dialog_threads.values:
+            thr[0].queue.put(Envelope(Event.START, None, None)
         while True:
             try:
                 longpoll = VkLongPoll(self._vk)
@@ -295,7 +289,8 @@ class Artem(object):
                                     queue.put(
                                         Envelope(
                                             Event.ANSWER,
-                                            event.user_id, event.text.lower()
+                                            event.user_id, 
+                                            event.text.lower()
                                         )
                                     )
                                 )
@@ -504,6 +499,20 @@ class Artem(object):
                         '\n'.join(p.scn_type.__name__
                                   for p in self._lib[args[0]])
             )
+        self._cmd.add('info',
+            'Get description and information about existing scenarios'
+            ).action(
+                CommandType.INFO,
+                AdminClass.NONE,
+                [],
+                lambda some_id:
+                    '\n'.join(
+                        [str(i) + '.------[' + str(scen.scn_type.description) + ']'
+                            for i, scen in enumerate(
+                                reduce(lambda x, y: x + y, self._lib)
+                        )]
+                    )
+            )
         self._cmd.add('dialogs',
             'Provide information about artem\'s dialogs'
             ).action(
@@ -596,6 +605,17 @@ class Artem(object):
                         else 'SUSPENDED') +
                     '\nGlobal status: ' +
                     ('RUNNING' if self._run else 'SUSPENDED'))
+            )
+        self._cmd.add('new', 'Last release features'
+            ).action(
+                CommandType.INFO,
+                AdminClass.NONE,
+                [],
+                """1. New commands /info and /new\n
+2. Removed strict typing of scenarios\n
+3. Redesigned structure of DISCOURSE event. Now it's called TIME event
+ and has some different options
+4. other Fixes"""
             )
 
     def _stop_artem(self, some_id=None):

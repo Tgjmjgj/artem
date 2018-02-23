@@ -12,6 +12,7 @@ from .others import *
 DEFAULT_SESSION_DURATION = 30.0
 DEFAULT_ENABLED_SESSION = True
 DEFAULT_DISCOURSE_INTERVAL_MAX = 86400
+DEFAULT_TIME_EVENT_ITERATION = 5.0
 
 class DialogThread(threading.Thread):
 
@@ -24,8 +25,8 @@ class DialogThread(threading.Thread):
     # {"user_id": Thread class object}
     _sessions = {}
 
-    def __init__(self, some_id, postback_queue, lib, interlocutors, logger,
-                 start, global_names, global_admins):
+    def __init__(self, some_id, postback_queue, lib, interlocutors, 
+                logger, global_names, global_admins):
 
         threading.Thread.__init__(self)
         self.daemon = True
@@ -35,13 +36,10 @@ class DialogThread(threading.Thread):
         self.queue = queue.Queue()
         self.interlocutors = interlocutors
         self._logger = logger
-        self.enabled_session = Wrap()
-        self.enabled_session.val = DEFAULT_ENABLED_SESSION
-        self.session_duration = Wrap()
-        self.session_duration.val = DEFAULT_SESSION_DURATION
-        self.discourse_interval_max = Wrap()
-        self.discourse_interval_max.val = DEFAULT_DISCOURSE_INTERVAL_MAX
-        self._start = start
+        self.enabled_session = Wrap(DEFAULT_ENABLED_SESSION)
+        self.session_duration = Wrap(DEFAULT_SESSION_DURATION)
+        self.time_event_iteration = Wrap(DEFAULT_TIME_EVENT_ITERATION)
+        self.discourse_interval_max = Wrap(DEFAULT_DISCOURSE_INTERVAL_MAX)
         self._run_scen = []
         self._run_post_scen = []
         self._sessions = {}
@@ -54,21 +52,31 @@ class DialogThread(threading.Thread):
         self._global_lib = lib
 
     def restore(self, sessions, duration, discourse,
-                local_names, local_admins):
+                time_iter, local_names, local_admins):
         self.enabled_session.val = sessions
         self.session_duration.val = duration
         self.discourse_interval_max.val = discourse
+        self.time_event_iteration = time_iter
         self.local_names = local_names
         self.local_admins = local_admins
 
+    def _time_events_manager(self):
+        while True:
+            try:
+                for evt in self.lib.time_events:
+                    if evt['subevent'] == TimeEvent.TIME:
+
+
+
+                time.sleep(TIME_EVENT_ITERATION)
+            except Exception:
+                self._logger.error(traceback.format_exc())
+
     def run(self):
         try:
-            if self._start:
-                self._run(Event.START, msg=None, one=False)
-            self._activate_discourse()
+            threading.Thread(target=self._time_events_manager).start()
         except:
             self._logger.error(traceback.format_exc())
-
         while True:
             try:
                 msg = self.queue.get()
@@ -76,7 +84,9 @@ class DialogThread(threading.Thread):
                     self._run(Event.ANSWER, msg)
                 elif msg.event == Event.ADDFRIEND:
                     self._run(Event.ADDFRIEND, msg)
-            except:
+                elif msg.event == Event.START:
+                    self._run(Event.START, None, False)
+            except Exception:
                 self._logger.error(traceback.format_exc())
 
     # FEROCITY or 'лютая дичь'
@@ -121,10 +131,14 @@ class DialogThread(threading.Thread):
                 else:
                     postproc_answers = self._find_answer(
                         Event.POSTPROC,
-                        sender_id, message, is_personal, name,
+                        sender_id,
+                        message,
+                        is_personal,
+                        name,
                         lambda a: (a, len(a) > 1),
-                        ans['message'], False
-                        )
+                        ans['message'],
+                        False
+                    )
                     attach, sticker = None, None
                     if ans['attach']:
                         attach = ans['attach']

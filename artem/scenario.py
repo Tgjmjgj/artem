@@ -1,6 +1,8 @@
 import random
 
-
+DEFAULT_MAX_REPLICAS = 5
+DEFAULT_MAX_IDLE_TIME = 20
+DEFAULT_WITH_ALL_MODE = False
 
 class Scenario(object):
 
@@ -11,9 +13,11 @@ class Scenario(object):
     # list of Artem names
     names = None
 
-    max_replicas = 5
-    max_idle_time = 20
-    with_all = False
+    description = 'Scenario without description'
+
+    max_replicas = DEFAULT_MAX_REPLICAS
+    max_idle_time = DEFAULT_MAX_IDLE_TIME
+    with_all = DEFAULT_WITH_ALL_MODE
 
     message = None
     i_sender = None
@@ -29,36 +33,9 @@ class Scenario(object):
     # return answers [{message: 'str', sleep: 1.0, attach: 'photo'}]
     respond = lambda self: [u'Тест сценария ' + self.__class__.__name__]
 
-def wrap_respond(func):
-    def wrap(self):
-        if isinstance(func, str):
-            ret = func
-        else:
-            ret = func()
-        self.respond = None
-        return ret
-    return wrap
-
-def wrap_suitable(func):
-    def wrap(message, i_sender, interlocutors, is_personal, name):
-        if isinstance(func, str):
-            if func[0] == '<' and func[-1] == '>':
-                words = func[1:-1].split('|')
-                if find_element(words, lambda w: w in message):
-                    return True
-                else:
-                    return False
-            else:
-                return message == func
-        elif func(message):
-            return True
-        else:
-            return False
-    return staticmethod(wrap)
-
 def m(text, sleep=0.0, attach=None, sticker=None):
     if sleep == 0.0:
-        sleep = 1.0 + 5 * round(random.random(), 3)
+        sleep = 1.0 + 4 * round(random.random(), 3)
     return {'message': text, 'sleep': sleep,
             'attach': attach, 'sticker' : sticker}    
 

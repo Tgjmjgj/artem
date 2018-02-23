@@ -1,7 +1,10 @@
 import enum
 import random
+import re
+from datetime import datetime
 
 from .scenario import *
+
 
 def _if_dict(new_answer, nosleep=False):
     if not 'message' in new_answer:
@@ -82,6 +85,76 @@ def run_scen(scen):
                 str(type(scen)) + ' :  ' + str(new_answers))   
     return new_answers
 
+def _wrap_respond(func):
+    if isinstance(func, str):
+        func = lambda: func
+    def wrap(self):
+        ret = func()
+        self.respond = None
+        return ret
+    return wrap
+
+def _wrap_suitable(func):
+    def wrap(message, i_sender, interlocutors, is_personal, name):
+        if isinstance(func, str):
+            if func[0] == '<' and func[-1] == '>':
+                words = func[1:-1].split('|')
+                return (True if 
+                    find_element(words, lambda w: w in message)
+                    else False)
+            else:
+                words = func.split('|')
+                return True if message in words else False
+        else:
+            return True if func(message) else False
+    return staticmethod(wrap)
+
+def make_scen(scen, handler, suitable):
+    if not scen:
+        if handler:
+            if not isinstance(handler, 
+                    (types.FunctionType,
+                    types.BuiltinFunctionType,
+                    types.MethodType,
+                    types.BuiltinMethodType,
+                    str)):
+                raise TypeError('Handler must be function or str value')
+        else:
+            raise ValueError('Handler must be declared')
+        if suitable:
+            if not isinstance(suitable,
+                    (types.BuiltinFunctionType,
+                    types.MethodType,
+                    types.BuiltinMethodType,
+                    str)):
+                raise TypeError('Suitable must be function or str value')
+        else:
+            suitable = lambda: True
+        scen = type(
+            'Scenario' + str(id(handler)),
+            (Scenario,),
+            {
+                'respond': _wrap_respond(handler),
+                'suitable': _wrap_suitable(suitable)
+            }
+        )
+    elif not isinstance(scen, Scenario):
+        # duct tape 2
+        if not hasattr(scen, 'respond'):
+            raise ValueError('Handler must be declared')
+        if not hasattr(scen, 'suitable'):
+            scen.suitable = _wrap_suitable(lambda: True)
+        if not hasattr(scen, 'max_replicas'):
+            scen.max_replicas = DEFAULT_MAX_REPLICAS
+        if not hasattr(scen, 'max_idle_time'):
+            scen.max_idle_time = DEFAULT_MAX_IDLE_TIME
+        if not hasattr(scen, 'with_all'):
+            scen.with_all = DEFAULT_WITH_ALL_MODE
+        if not hasattr(scen, 'description'):
+            scen.description = 'Auto-generated scenario without description'
+    return scen
+    
+
 class EventMetaclass(enum.EnumMeta):
 
     def __getitem__(self, key):
@@ -98,29 +171,33 @@ class Event(enum.Enum, metaclass=EventMetaclass):
     ADDFRIEND = 2
     ANSWER = 3
     POSTPROC = 4
-    DISCOURSE = 5
+    TIME = 5
 
+
+class TimeEvent(enum.Enum, metaclass=EventMetaclass):
+    TIME = 1
+    IDLE = 2
+    CALM = 3
 
 
 class Lib(object):
 
 
+    class SimpleIterator(object):
+
+        def __init__(self, all_scen):
+            self._list = all_scen
+            self._cursor = 0
+    
+        def __next__(self):
+            if self._cursor >= len(self._list):
+                raise StopIteration
+            else:
+                result = self._list[self._cursor]
+                self._cursor += 1
+                return result
+
     class Scenarios(object):
-
-
-        class ScenariosIterator(object):
-
-            def __init__(self, list_):
-                self._list = list_
-                self._cursor = 0
-        
-            def __next__(self):
-                if self._cursor >= len(self._list):
-                    raise StopIteration
-                else:
-                    result = self._list[self._cursor]
-                    self._cursor += 1
-                    return result
 
 
         class ScenInfo(object):
@@ -160,6 +237,11 @@ class Lib(object):
             self._scenarios.append(self.ScenInfo(scn_type, priority))
             self._scenarios.sort(key=lambda s: s.priority, reverse=True)
 
+        def rem(self, scn_type):
+            item = such_scen(scn_type.__name__.lower())
+            if item:
+                self._scenarios.remove(item)
+
         def such_scen(self, scn_name):
             return find_element(
                     self._scenarios, 
@@ -175,7 +257,7 @@ class Lib(object):
                 scn.status = status
         
         def __iter__(self):
-            return self.ScenariosIterator(self._scenarios)
+            return Lib.SimpleIterator(self._scenarios)
         
         def __len__(self):
             return len(self._scenarios)
@@ -191,12 +273,23 @@ class Lib(object):
 
     def __init__(self):
         self._all_scenarios = []
+        self.time_events = []
         for event in Event:
             self._all_scenarios.append(self.Scenarios(event))
+
+    @property
+    def time_events(self):
+        return self._time_events
+
+    @time_events.setter
+    def time_events(self, value):
+        self._time_events = value
 
     def _get_scenarios(self, event):
         if isinstance(event, str):
             event = Event[event.upper()]
+        elif not isinstance(event, Event):
+            raise TypeError(str(event) + ' event not defined')
         return find_element(self._all_scenarios, lambda s: s.event == event)
 
     def get_sceninfo(self, event, scn_name):
@@ -211,11 +304,54 @@ class Lib(object):
     def add(self, event, scn_type, priority):
         self._get_scenarios(event).add(scn_type, priority)
 
+    def remove(self, event, scn_type):
+        self._get_scenarios(event).rem(scn_type)
+
     def exists(self, event, scn_name):
         return (True 
                 if self._get_scenarios(event).such_scen(scn_name)
                 else False)
-    
+
+    def new_time_event(subevent, interval, dispersion, option_behavior=False):
+        if isinstance(subevent, str):
+            subevent = TimeEvent[subevent]
+        elif not isinstance(subevent, TimeEvent):
+            raise TypeError(str(subevent) + ' Time event not defined')
+        if subevent == TimeEvent.TIME:
+            if isinstance(interval, (list, tuple)):
+                if len(interval) == 2:
+                    pass
+                elif len(interval) == 1:
+                    interval = interval[0]
+                else:
+                    raise ValueError('Interval must be a enumerate of 2 elements or one value')
+            elif not isinstance(interval, datetime):
+                pass
+        if not isinstance(interval, str):
+            raise TypeError('Interval ' + str(interval) + ' not a string')
+        ptrn = '^(([0-9]{1,2}(M))?([0-9]{1,2}(D|d))?([0-9]{1,2}(H|h))?([0-9]{1,2}(m))?)$'
+        if not re.match(ptrn, interval):
+            raise ValueError('Interval ' + interval + ' has incorrect syntax')
+        if dispersion:
+            if not isinstance(dispersion, str):
+                raise TypeError('Time dispersion ' +
+                    str(interval) + ' not a string')
+            if not re.match(ptrn, dispersion):
+                raise ValueError('Time dispersion ' +
+                    interval + ' has incorrect syntax')
+        self.time_events.append(
+            {
+                'subevent': subevent,
+                'interval': interval,
+                'dispersion': dispersion
+            })
+
+    def __iter__(self):
+        return Lib.SimpleIterator(self._all_scenarios)
+
+    def __len__(self):
+        return len(self._all_scenarios)
+
     def __getitem__(self, key):
         if isinstance(key, str):
             key = Event[key]
@@ -344,6 +480,9 @@ class ToSend(object):
 
 class Wrap(object):
 
+    def __init__(self, value):
+        self.val = value
+
     @property
     def val(self):
         return self._val
@@ -351,3 +490,40 @@ class Wrap(object):
     @val.setter
     def val(self, value):
         self._val = value
+
+
+class TimeIntervals(object):
+
+    def __init__(self, global_rand=0):
+        self.global_rand = global_rand
+        self.intervals = []
+
+    @property
+    def global_rand(self):
+        return self._global_rand
+
+    @global_rand.setter
+    def global_rand(self, value):
+        self._global_rand = value
+
+    @property
+    def intervals(self):
+        return self._intervals
+
+    @intervals.setter
+    def intervals(self, value):
+        self._intervals = value
+
+    def add(self, first_datetime, second_datetime, rand=0, universal=True):
+        if (not isinstance(first_datetime, datetime) or 
+                not isinstance(second_datetime, datetime)):
+            raise TypeError('first_datetime and second_datetime should be (rly) datetimes')
+        elif second_datetime < first_datetime:
+            raise ValueError('second datetime should be larger than the first')
+        if universal and first_datetime < datetime.now():
+            delta_time = second_datetime - first_datetime
+            first_datetime.date = datetime.now().date
+            if first_datetime < datetime.now():
+                first_datetime.day += 1
+            second_datetime = first_datetime + delta_time
+        self.intervals.append(first_datetime, second_datetime, rand)
