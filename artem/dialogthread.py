@@ -67,7 +67,6 @@ class DialogThread(threading.Thread):
                     if evt['subevent'] == TimeEvent.TIME:
 
 
-
                 time.sleep(TIME_EVENT_ITERATION)
             except Exception:
                 self._logger.error(traceback.format_exc())

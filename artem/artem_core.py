@@ -64,7 +64,8 @@ class Artem(object):
         self._id = response[0]['id']
         self._global_names = sorted(names)
 
-    def on(self, event, scen=None, prior=0, handler=None, suitable=None):
+    def on(self, event, scen=None, prior=0, time=None, 
+           handler=None, suitable=None):
         try:
             scen = make_scen(scen, handler, suitable)
             self._lib.add(event, scen, prior)
@@ -73,16 +74,6 @@ class Artem(object):
                         event, scen, prior))
             return scen
         except Exception:
-            self._logger.error(traceback.format_exc())
-
-    def onTimeEvent(self, ,
-                    scen=None, prior=0, handler=None):
-        try:
-            scn = self.on('TIME', scen, prior, handler)
-            self._lib.new_time_event(subevent, interval, dispersion)
-        except Exception:
-            if scn:
-                self._lib.remove('TIME', scn)
             self._logger.error(traceback.format_exc())
 
     def _create_logger(self):

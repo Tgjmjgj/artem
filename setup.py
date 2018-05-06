@@ -1,9 +1,6 @@
 from os.path import realpath, dirname, join
 from setuptools import setup, find_packages
 
-import artem
-
-VERSION = artem.artem_core.VERSION
 PROJECT_ROOT = dirname(realpath(__file__))
 
 REQUIREMENTS_FILE = join(PROJECT_ROOT, 'requirements.txt')
@@ -13,6 +10,7 @@ with open(REQUIREMENTS_FILE) as f:
 
 install_reqs.append('setuptools')
 
+from artem import VERSION
 
 setup(name='artem',
       version=VERSION,
@@ -21,7 +19,7 @@ setup(name='artem',
       author_email='Chesh397@mail.ru',
       url='https://github.com/Tgjmjgj/artem',
       download_url = ('https://github.com/Tgjmjgj/artem/archive/' + 
-            artem.artem_core.VERSION + '.tar.gz'),
+            VERSION + '.tar.gz'),
       packages=find_packages(),
       include_package_data=True,
       install_requires=install_reqs,

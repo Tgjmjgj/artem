@@ -172,12 +172,8 @@ class Event(enum.Enum, metaclass=EventMetaclass):
     ANSWER = 3
     POSTPROC = 4
     TIME = 5
-
-
-class TimeEvent(enum.Enum, metaclass=EventMetaclass):
-    TIME = 1
-    IDLE = 2
-    CALM = 3
+    IDLE = 6
+    SILENCE = 7
 
 
 class Lib(object):
@@ -311,40 +307,6 @@ class Lib(object):
         return (True 
                 if self._get_scenarios(event).such_scen(scn_name)
                 else False)
-
-    def new_time_event(subevent, interval, dispersion, option_behavior=False):
-        if isinstance(subevent, str):
-            subevent = TimeEvent[subevent]
-        elif not isinstance(subevent, TimeEvent):
-            raise TypeError(str(subevent) + ' Time event not defined')
-        if subevent == TimeEvent.TIME:
-            if isinstance(interval, (list, tuple)):
-                if len(interval) == 2:
-                    pass
-                elif len(interval) == 1:
-                    interval = interval[0]
-                else:
-                    raise ValueError('Interval must be a enumerate of 2 elements or one value')
-            elif not isinstance(interval, datetime):
-                pass
-        if not isinstance(interval, str):
-            raise TypeError('Interval ' + str(interval) + ' not a string')
-        ptrn = '^(([0-9]{1,2}(M))?([0-9]{1,2}(D|d))?([0-9]{1,2}(H|h))?([0-9]{1,2}(m))?)$'
-        if not re.match(ptrn, interval):
-            raise ValueError('Interval ' + interval + ' has incorrect syntax')
-        if dispersion:
-            if not isinstance(dispersion, str):
-                raise TypeError('Time dispersion ' +
-                    str(interval) + ' not a string')
-            if not re.match(ptrn, dispersion):
-                raise ValueError('Time dispersion ' +
-                    interval + ' has incorrect syntax')
-        self.time_events.append(
-            {
-                'subevent': subevent,
-                'interval': interval,
-                'dispersion': dispersion
-            })
 
     def __iter__(self):
         return Lib.SimpleIterator(self._all_scenarios)

@@ -6,6 +6,8 @@
 ![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)
 ![License](https://img.shields.io/badge/license-apache-yellow.svg)
 
+## <span style="color: #660000">Yes, this is another deprecated project.</span>
+
 ## _Simple core for creating chatbots in VK (vk.com)_
 
 Artem is an easy core for creating chatbots in _vk.com_ based on the flexible mechanism of user scenarios for replies.
