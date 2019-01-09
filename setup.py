@@ -10,7 +10,7 @@ with open(REQUIREMENTS_FILE) as f:
 
 install_reqs.append('setuptools')
 
-from artem import VERSION
+VERSION = '1.11.03'
 
 setup(name='artem',
       version=VERSION,

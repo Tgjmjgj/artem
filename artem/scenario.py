@@ -31,24 +31,25 @@ class Scenario(object):
 
     # function(self, message)
     # return answers [{message: 'str', sleep: 1.0, attach: 'photo'}]
-    respond = lambda self: [u'Тест сценария ' + self.__class__.__name__]
+    respond = lambda self: ['Тест сценария ' + self.__class__.__name__]
+
+    def __init__(self, interlocutors, names):
+        self.messages_history = []
+        self.interlocutors = interlocutors
+        self.names = names
+        self.replic_count = 0
+
+    def update_env(self, message, i_sender, is_personal=True, answer=None):
+        self.message = message
+        self.i_sender = i_sender
+        self.is_personal = is_personal
+        self.answer = answer
 
 def m(text, sleep=0.0, attach=None, sticker=None):
     if sleep == 0.0:
         sleep = 1.0 + 4 * round(random.random(), 3)
     return {'message': text, 'sleep': sleep,
             'attach': attach, 'sticker' : sticker}    
-
-def set_env(scen, interlocutors, names):
-    scen.messages_history = []
-    scen.interlocutors = interlocutors
-    scen.names = names
-
-def update_env(scen, message, i_sender, is_personal=True, answer=None):
-    scen.message = message
-    scen.i_sender = i_sender
-    scen.is_personal = is_personal
-    scen.answer = answer
 
 def find_element(enumerate_, predicate):
     ret_value = None

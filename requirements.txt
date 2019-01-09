@@ -8,3 +8,5 @@ requests
 six
 urllib3
 vk-api
+sortedcontainers
+metadate

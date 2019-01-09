@@ -1,10 +1,9 @@
-import enum
 import random
 import re
 from datetime import datetime
+import types
 
 from .scenario import *
-
 
 def _if_dict(new_answer, nosleep=False):
     if not 'message' in new_answer:
@@ -139,7 +138,7 @@ def make_scen(scen, handler, suitable):
             }
         )
     elif not isinstance(scen, Scenario):
-        # duct tape 2
+        # duct tape 2 or not
         if not hasattr(scen, 'respond'):
             raise ValueError('Handler must be declared')
         if not hasattr(scen, 'suitable'):
@@ -153,28 +152,6 @@ def make_scen(scen, handler, suitable):
         if not hasattr(scen, 'description'):
             scen.description = 'Auto-generated scenario without description'
     return scen
-    
-
-class EventMetaclass(enum.EnumMeta):
-
-    def __getitem__(self, key):
-        if isinstance(key, str):
-            key = key.upper()
-        for item in self:
-            if item.name == key:
-                return item
-        return None
-
-
-class Event(enum.Enum, metaclass=EventMetaclass):
-    START = 1
-    ADDFRIEND = 2
-    ANSWER = 3
-    POSTPROC = 4
-    TIME = 5
-    IDLE = 6
-    SILENCE = 7
-
 
 class Lib(object):
 
@@ -194,7 +171,6 @@ class Lib(object):
                 return result
 
     class Scenarios(object):
-
 
         class ScenInfo(object):
             
@@ -489,3 +465,4 @@ class TimeIntervals(object):
                 first_datetime.day += 1
             second_datetime = first_datetime + delta_time
         self.intervals.append(first_datetime, second_datetime, rand)
+
