@@ -153,6 +153,9 @@ def make_scen(scen, handler, suitable):
             scen.description = 'Auto-generated scenario without description'
     return scen
 
+def left_seconds(from_datetime):
+    return (datetime.now() - from_datetime).seconds / 60
+
 class Lib(object):
 
 

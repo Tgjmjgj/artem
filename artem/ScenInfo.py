@@ -56,6 +56,19 @@ class TimeScenInfo(ScenInfo):
             while first_time + rand_delta < datetime.now():
                 first_time += self._interval
         self._next_time = first_time + rand_delta
+        self._next_time_without_rand = first_time
+    
+    @property
+    def next_time(self):
+        return self._next_time
+    
+    def calculate_next(self):
+        half = self._rand_shift / 2
+        rand_delta = timedelta(seconds=randint(-half, half))
+        if self._is_static_time:
+            self._next_time = self._next_time_without_rand + rand_delta
+        else:
+            self._next_time = self._next_time + rand_delta
 
 class WaitScenInfo(ScenInfo):
 
@@ -63,4 +76,16 @@ class WaitScenInfo(ScenInfo):
         super().__init__(scen_class_type)
         self._delta = time_delta
         self._rand_shift = rand_shift
+        self.calculate_next()
+
+    @property
+    def deltatime(self):
+        return self._delta + self._rand_delta
+
+    def calculate_next(self):
+        half = self._rand_shift / 2
+        self._rand_delta = timedelta(seconds=randint(-half, half))
+
+    
+
     

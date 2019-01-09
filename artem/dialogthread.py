@@ -10,7 +10,7 @@ import time
 
 from .scenario import *
 from .others import *
-from .Running import Running
+from .ScSelector import *
 
 DEFAULT_TIME_EVENT_ITERATION = 5.0
 
@@ -64,8 +64,54 @@ class DialogThread(threading.Thread):
     def setEnablingState(self, new_state):
         self.status = new_state
     
+    def _check_idle(self, idle_time):
+        idle_scens = select_wait_event(
+            idle_time,
+            self.lib[Event.IDLE],
+            self._global_lib[Event.IDLE],
+            self._run_scen,
+            self.interlocutors,
+            self.local_names + self._global_names
+        )
+        for scen in idle_scens:
+            answers = self._run_scenario(scen, None, None, None)
+            panswers = self._postprocess(answers, None, None, None, None)
+            for ans in panswers:
+                self._postback_queue.put(ans)
+
+    def _check_silence(self, silence_time):
+        silence_scens = select_wait_event(
+            silence_time,
+            self.lib[Event.SILENCE],
+            self._global_lib[Event.SILENCE],
+            self._run_scen,
+            self.interlocutors,
+            self.local_names + self._global_names
+        )
+        for scen in silence_scens:
+            answers = self._run_scenario(scen, None, None, None)
+            panswers = self._postprocess(answers, None, None, None, None)
+            for ans in panswers:
+                self._postback_queue.put(ans)
+
+    def _check_time(self):
+        time_scens = select_time_event(
+            self.lib[Event.TIME],
+            self._global_lib[Event.TIME],
+            self._run_scen,
+            self.interlocutors,
+            self.local_names + self._global_names
+        )
+        for scen in time_scens:
+            answers = self._run_scenario(scen, None, None, None)
+            panswers = self._postprocess(answers, None, None, None, None)
+            for ans in panswers:
+                self._postback_queue.put(ans)
+
     def _time_events(idle_time, silence_time):
-        pass
+        self._check_idle(idle_time)
+        self._check_silence(silence_time)
+        self._check_time()
     
     def run(self):
         last_non_idle_time = datetime.datetime.now()
@@ -97,13 +143,12 @@ class DialogThread(threading.Thread):
         """
         if is_personal and self.enabled_session.val:
             self._update_session(envelope.sender_id)
-        selector = ScSelector(
+        scenario = select_answer(
             self.lib[envelope.event],
             self._global_lib[envelope.event],
-            self._run_scen
-        )
-        scenario = selector.select(envelope.sender_id, sender, envelope.message, self.interlocutors,
-                                   is_personal, name, self.local_names + self._global_names, None)
+            self._run_scen, envelope.sender_id,
+            sender, envelope.message, self.interlocutors,
+            is_personal, name, self.local_names + self._global_names, None)
         answers = None
         try:
             while not answers:
@@ -116,15 +161,15 @@ class DialogThread(threading.Thread):
     def _postprocess(self, answers, envelope, name, is_personal, sender):
         answers_left = len(answers)
         ret_answers = []
+        message = envelope.message if envelope else None
+        sender_id = envelope.sender_id if envelope else None
         for answer in answers:
             answers_left -= 1
-            postproc_selector = ScSelector(
+            pp_scenario = select_postproc(
                 self.lib[Event.POSTPROC],
                 self._global_lib[Event.POSTPROC],
-                self._run_post_scen
-            )
-            pp_scenario = selector.select(
-                envelope.sender_id, sender, envelope.message, self.interlocutors,
+                self._run_post_scen,
+                sender_id, sender, message, self.interlocutors,
                 is_personal, name, self.local_names + self._global_names, answer
             )
             postproc_answers = None
@@ -132,7 +177,7 @@ class DialogThread(threading.Thread):
                 while not postproc_answers:
                     scn = next(pp_scenario)
                     scn.answers_left = answers_left
-                    postproc_answers = self._run_scenario(scn, envelope.message, sender, is_personal, answer)
+                    postproc_answers = self._run_scenario(scn, message, sender, is_personal, answer)
             except StopIteration:
                 pass
             attach, sticker = None, None

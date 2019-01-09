@@ -23,10 +23,11 @@ class Scenario(object):
     i_sender = None
     is_personal = None
     answer = None
+    answers_left = 0
         
     # return boolean
     @staticmethod
-    def suitable(message, i_sender, interlocutors, is_personal, name):
+    def suitable(message, i_sender, interlocutors, is_personal, name, answer):
         return True
 
     # function(self, message)
