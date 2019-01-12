@@ -4,15 +4,16 @@ message ProtoArtem {
     repeated int32 global_admins = 1;
     repeated string global_names = 2;
     float polling_interval = 3;
+    bool run = 4;
 
     message ProtoThread {
         int32 some_id = 1;
-        int32 discourse_interval_max = 2;
-        repeated string names = 3;
-        repeated int32 admins = 4;
-        float session_duration = 5;
-        bool sessions = 6;
+        repeated string names = 2;
+        repeated int32 admins = 3;
+        float session_duration = 4;
+        bool sessions = 5;
+        bool run = 6;
     }
 
-    repeated ProtoThread dialog_threads = 4;
+    repeated ProtoThread dialog_threads = 5;
 }

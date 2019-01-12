@@ -16,3 +16,6 @@ dist/
 
 # Package
 __init__.py
+
+# venv
+aenv/

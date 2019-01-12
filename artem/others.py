@@ -2,6 +2,7 @@ import random
 import re
 from datetime import datetime
 import types
+import enum
 
 from .scenario import *
 
@@ -94,38 +95,38 @@ def _wrap_respond(func):
     return wrap
 
 def _wrap_suitable(func):
-    def wrap(message, i_sender, interlocutors, is_personal, name):
+    def wrap(message, i_sender, interlocutors, is_personal, name, answer):
         if isinstance(func, str):
             if func[0] == '<' and func[-1] == '>':
                 words = func[1:-1].split('|')
-                return (True if 
-                    find_element(words, lambda w: w in message)
-                    else False)
+                return True if find_element(words, lambda w: w in message) else False
             else:
                 words = func.split('|')
                 return True if message in words else False
         else:
-            return True if func(message) else False
+            try:
+                ret = func(message)
+            except TypeError:
+                ret = func()
+            return True if ret else False
     return staticmethod(wrap)
 
 def make_scen(scen, handler, suitable):
     if not scen:
+        valid_types = (
+            types.FunctionType,
+            types.BuiltinFunctionType,
+            types.MethodType,
+            types.BuiltinMethodType,
+            str
+        )
         if handler:
-            if not isinstance(handler, 
-                    (types.FunctionType,
-                    types.BuiltinFunctionType,
-                    types.MethodType,
-                    types.BuiltinMethodType,
-                    str)):
+            if not isinstance(handler, valid_types):
                 raise TypeError('Handler must be function or str value')
         else:
             raise ValueError('Handler must be declared')
         if suitable:
-            if not isinstance(suitable,
-                    (types.BuiltinFunctionType,
-                    types.MethodType,
-                    types.BuiltinMethodType,
-                    str)):
+            if not isinstance(suitable, valid_types):
                 raise TypeError('Suitable must be function or str value')
         else:
             suitable = lambda: True
@@ -155,152 +156,6 @@ def make_scen(scen, handler, suitable):
 
 def left_seconds(from_datetime):
     return (datetime.now() - from_datetime).seconds / 60
-
-class Lib(object):
-
-
-    class SimpleIterator(object):
-
-        def __init__(self, all_scen):
-            self._list = all_scen
-            self._cursor = 0
-    
-        def __next__(self):
-            if self._cursor >= len(self._list):
-                raise StopIteration
-            else:
-                result = self._list[self._cursor]
-                self._cursor += 1
-                return result
-
-    class Scenarios(object):
-
-        class ScenInfo(object):
-            
-            def __init__(self, scen_class_type, priority):
-                self.scn_type = scen_class_type
-                self._priority = priority
-                self.status = True
-
-            @property
-            def scn_type(self):
-                return self._scn_type
-
-            @scn_type.setter
-            def scn_type(self, value):
-                self._scn_type = value
-
-            @property
-            def priority(self):
-                return self._priority
-
-            @property
-            def status(self):
-                return self._status
-
-            @status.setter
-            def status(self, value):
-                if isinstance(value, bool):
-                    self._status = value
-
-
-        def __init__(self, event):
-            self.event = event
-            self._scenarios = []
-
-        def add(self, scn_type, priority):
-            self._scenarios.append(self.ScenInfo(scn_type, priority))
-            self._scenarios.sort(key=lambda s: s.priority, reverse=True)
-
-        def rem(self, scn_type):
-            item = such_scen(scn_type.__name__.lower())
-            if item:
-                self._scenarios.remove(item)
-
-        def such_scen(self, scn_name):
-            return find_element(
-                    self._scenarios, 
-                    lambda s: s.scn_type.__name__.lower() == scn_name
-                    )
-
-        def get_status(self, scn_name):
-            return self.such_scen(scn_name).status
-        
-        def set_status(self, scn_name, status):
-            scn = self.such_scen(scn_name)
-            if scn:
-                scn.status = status
-        
-        def __iter__(self):
-            return Lib.SimpleIterator(self._scenarios)
-        
-        def __len__(self):
-            return len(self._scenarios)
-
-        def __getitem__(self, key):
-            if key is None:
-                raise KeyError
-            elif not isinstance(key, int):
-                raise TypeError
-            else:
-                return self._scenarios[key]
-
-
-    def __init__(self):
-        self._all_scenarios = []
-        self.time_events = []
-        for event in Event:
-            self._all_scenarios.append(self.Scenarios(event))
-
-    @property
-    def time_events(self):
-        return self._time_events
-
-    @time_events.setter
-    def time_events(self, value):
-        self._time_events = value
-
-    def _get_scenarios(self, event):
-        if isinstance(event, str):
-            event = Event[event.upper()]
-        elif not isinstance(event, Event):
-            raise TypeError(str(event) + ' event not defined')
-        return find_element(self._all_scenarios, lambda s: s.event == event)
-
-    def get_sceninfo(self, event, scn_name):
-        return self._get_scenarios(event).such_scen(scn_name.lower())
-
-    def get_status(self, event, scn_name):
-        return self._get_scenarios(event).get_status(scn_name.lower())
-
-    def set_status(self, event, scn_name, status):
-        self._get_scenarios(event).set_status(scn_name.lower(), status)
-
-    def add(self, event, scn_type, priority):
-        self._get_scenarios(event).add(scn_type, priority)
-
-    def remove(self, event, scn_type):
-        self._get_scenarios(event).rem(scn_type)
-
-    def exists(self, event, scn_name):
-        return (True 
-                if self._get_scenarios(event).such_scen(scn_name)
-                else False)
-
-    def __iter__(self):
-        return Lib.SimpleIterator(self._all_scenarios)
-
-    def __len__(self):
-        return len(self._all_scenarios)
-
-    def __getitem__(self, key):
-        if isinstance(key, str):
-            key = Event[key]
-        if not isinstance(key, Event):
-            raise TypeError
-        else:
-            return self._get_scenarios(key)
-
 
 class Interlocutor(object):
 
@@ -333,7 +188,6 @@ class Interlocutor(object):
     def last_name(self, value):
         self._last_name = value
 
-
 class Envelope(object):
 
     def __init__(self, event, sender_id, message):
@@ -364,7 +218,6 @@ class Envelope(object):
     @event.setter
     def event(self, value):
         self._event = value
-
 
 class ToSend(object):
 
@@ -418,7 +271,6 @@ class ToSend(object):
     def sticker(self, value):
         self._sticker = value
 
-
 class Wrap(object):
 
     def __init__(self, value):
@@ -431,41 +283,3 @@ class Wrap(object):
     @val.setter
     def val(self, value):
         self._val = value
-
-
-class TimeIntervals(object):
-
-    def __init__(self, global_rand=0):
-        self.global_rand = global_rand
-        self.intervals = []
-
-    @property
-    def global_rand(self):
-        return self._global_rand
-
-    @global_rand.setter
-    def global_rand(self, value):
-        self._global_rand = value
-
-    @property
-    def intervals(self):
-        return self._intervals
-
-    @intervals.setter
-    def intervals(self, value):
-        self._intervals = value
-
-    def add(self, first_datetime, second_datetime, rand=0, universal=True):
-        if (not isinstance(first_datetime, datetime) or 
-                not isinstance(second_datetime, datetime)):
-            raise TypeError('first_datetime and second_datetime should be (rly) datetimes')
-        elif second_datetime < first_datetime:
-            raise ValueError('second datetime should be larger than the first')
-        if universal and first_datetime < datetime.now():
-            delta_time = second_datetime - first_datetime
-            first_datetime.date = datetime.now().date
-            if first_datetime < datetime.now():
-                first_datetime.day += 1
-            second_datetime = first_datetime + delta_time
-        self.intervals.append(first_datetime, second_datetime, rand)
-

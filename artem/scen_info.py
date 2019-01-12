@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+import datetime
 from random import randint
 
 from .scenario import Scenario
@@ -15,7 +15,6 @@ class ScenInfo(object):
 
     @scn_type.setter
     def scn_type(self, value):
-        if (isinstance(value, Scenario)):
             self._scn_type = value
 
     @property
@@ -37,7 +36,7 @@ class PriorScenInfo(ScenInfo):
     def priority(self):
         return self._priority
 
-    @property.setter
+    @priority.setter
     def priority(self, value):
         if (isinstance(value, (int, float))):
             self._priority = value
@@ -51,9 +50,9 @@ class TimeScenInfo(ScenInfo):
         self._rand_shift = rand_shift
         self._interval = None if second_time is None else second_time - first_time
         half = rand_shift / 2
-        rand_delta = timedelta(seconds=randint(-half, half))
+        rand_delta = datetime.timedelta(seconds=randint(-half, half))
         if self._interval is not None:
-            while first_time + rand_delta < datetime.now():
+            while first_time + rand_delta < datetime.datetime.now():
                 first_time += self._interval
         self._next_time = first_time + rand_delta
         self._next_time_without_rand = first_time
@@ -64,11 +63,12 @@ class TimeScenInfo(ScenInfo):
     
     def calculate_next(self):
         half = self._rand_shift / 2
-        rand_delta = timedelta(seconds=randint(-half, half))
+        rand_delta = datetime.timedelta(seconds=randint(-half, half))
         if self._is_static_time:
+            self._next_time_without_rand += self._interval
             self._next_time = self._next_time_without_rand + rand_delta
         else:
-            self._next_time = self._next_time + rand_delta
+            self._next_time = self._next_time + self._interval + rand_delta
 
 class WaitScenInfo(ScenInfo):
 
@@ -84,7 +84,7 @@ class WaitScenInfo(ScenInfo):
 
     def calculate_next(self):
         half = self._rand_shift / 2
-        self._rand_delta = timedelta(seconds=randint(-half, half))
+        self._rand_delta = datetime.timedelta(seconds=randint(-half, half))
 
     
 

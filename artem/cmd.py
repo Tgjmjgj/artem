@@ -8,9 +8,10 @@ from .scenario import find_element
 
 class CommandType(enum.Enum):
     INFO = 1
-    ADD_DEL = 2
-    ON_OFF = 3
-    SET = 4
+    CALL = 2
+    ADD_DEL = 3
+    ON_OFF = 4
+    SET = 5
 
 class ArgType(enum.Enum):
     WORD = 1
@@ -43,6 +44,7 @@ class Control(object):
 
             command_pattern = {
                 CommandType.INFO: '',
+                CommandType.CALL: '',
                 CommandType.ADD_DEL: ' (add|del)',
                 CommandType.ON_OFF: ' (on|off)',
                 CommandType.SET: ' set'
@@ -104,7 +106,7 @@ class Control(object):
                 else:
                     args_val = []
                     l = len(self._command)
-                    if self._cmd_type == CommandType.INFO:
+                    if self._cmd_type == CommandType.INFO or self._cmd_type == CommandType.CALL:
                         begin = l + 1
                         subcmd = None
                     else:

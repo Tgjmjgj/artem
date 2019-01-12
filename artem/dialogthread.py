@@ -1,5 +1,4 @@
 import threading
-import asyncio
 import random
 import traceback
 import datetime
@@ -10,13 +9,10 @@ import time
 
 from .scenario import *
 from .others import *
-from .ScSelector import *
+from .scselector import *
+from .artevent import ArtEvent
 
 DEFAULT_TIME_EVENT_ITERATION = 5.0
-
-class ScenarioSelectMode(Enum):
-    ONE = 1
-    ALL = 2
 
 class DialogThread(threading.Thread):
 
@@ -29,24 +25,24 @@ class DialogThread(threading.Thread):
     # {"user_id": Thread class object}
     _sessions = {}
 
-    def __init__(self, some_id, postback_queue, lib, interlocutors, 
-                logger, global_names, global_admins,
-                enable_ses, session_dur, discourse_max):
-
+    def __init__(
+            self, some_id, postback_queue, lib, interlocutors, 
+            logger, global_names, global_admins,
+            enable_ses, session_dur, run
+        ):
         threading.Thread.__init__(self)
         self.daemon = True
 
         self.some_id = some_id
-        self.status = True
+        self.status = run
         self._postback_queue = postback_queue
-        self.queue = asyncio.Queue()
+        self.queue = queue.Queue()
         self.interlocutors = interlocutors
         self._logger = logger
 
         self.enabled_session = enable_ses if isinstance(enable_ses, Wrap) else Wrap(enable_ses)
         self.session_duration = session_dur if isinstance(session_dur, Wrap) else Wrap(session_dur)
         self.time_event_iteration = Wrap(DEFAULT_TIME_EVENT_ITERATION)
-        self.discourse_interval_max = discourse_max if isinstance(discourse_max, Wrap) else Wrap(discourse_max)
         self._run_scen = []
         self._run_post_scen = []
         self._sessions = {}
@@ -64,80 +60,76 @@ class DialogThread(threading.Thread):
     def setEnablingState(self, new_state):
         self.status = new_state
     
-    def _check_idle(self, idle_time):
+    def _response(self, answers, idle_time, silence_time):
+            if answers:
+                panswers = self._postprocess(answers, None, None, None, None)
+                if panswers:
+                    for ans in panswers:
+                        self._postback_queue.put(ans)
+                        silence_time.val = idle_time.val = datetime.datetime.now()
+
+    def _time_events(self, idle_time, silence_time):
         idle_scens = select_wait_event(
-            idle_time,
-            self.lib[Event.IDLE],
-            self._global_lib[Event.IDLE],
+            idle_time.val,
+            self.lib[ArtEvent.IDLE],
+            self._global_lib[ArtEvent.IDLE],
             self._run_scen,
             self.interlocutors,
             self.local_names + self._global_names
         )
         for scen in idle_scens:
             answers = self._run_scenario(scen, None, None, None)
-            panswers = self._postprocess(answers, None, None, None, None)
-            for ans in panswers:
-                self._postback_queue.put(ans)
+            self._response(answers, idle_time, silence_time)
 
-    def _check_silence(self, silence_time):
         silence_scens = select_wait_event(
-            silence_time,
-            self.lib[Event.SILENCE],
-            self._global_lib[Event.SILENCE],
+            silence_time.val,
+            self.lib[ArtEvent.SILENCE],
+            self._global_lib[ArtEvent.SILENCE],
             self._run_scen,
             self.interlocutors,
             self.local_names + self._global_names
         )
         for scen in silence_scens:
             answers = self._run_scenario(scen, None, None, None)
-            panswers = self._postprocess(answers, None, None, None, None)
-            for ans in panswers:
-                self._postback_queue.put(ans)
-
-    def _check_time(self):
+            self._response(answers, idle_time, silence_time)
+        
         time_scens = select_time_event(
-            self.lib[Event.TIME],
-            self._global_lib[Event.TIME],
+            self.lib[ArtEvent.TIME],
+            self._global_lib[ArtEvent.TIME],
             self._run_scen,
             self.interlocutors,
             self.local_names + self._global_names
         )
         for scen in time_scens:
             answers = self._run_scenario(scen, None, None, None)
-            panswers = self._postprocess(answers, None, None, None, None)
-            for ans in panswers:
-                self._postback_queue.put(ans)
-
-    def _time_events(idle_time, silence_time):
-        self._check_idle(idle_time)
-        self._check_silence(silence_time)
-        self._check_time()
+            self._response(answers, idle_time, silence_time)
     
     def run(self):
-        last_non_idle_time = datetime.datetime.now()
-        last_non_silence_time = datetime.datetime.now()
+        last_non_idle_time = Wrap(datetime.datetime.now())
+        last_non_silence_time = Wrap(datetime.datetime.now())
         while True:
             try:
                 try:
-                    envelope = self.queue.get(timeout=TIME_EVENT_ITERATION)
-                    last_non_silence_time = datetime.datetime.now()
+                    envelope = self.queue.get(timeout=DEFAULT_TIME_EVENT_ITERATION)
+                    last_non_silence_time.val = datetime.datetime.now()
                     name = self._extract_name(envelope.message)
                     is_personal = self._is_message_personal(name)
                     sender = self._get_message_sender(envelope.sender_id)
-                    answers = self._handle(envelope, name, is_personal, sender)
-                    panswers = self._postprocess(answers, envelope, name, is_personal, sender)
-                    for ans in panswers:
-                        self._postback_queue.put(ans)
-                        last_non_idle_time = datetime.datetime.now()
+                    if envelope.event == ArtEvent.ANSWER:
+                        answers = self._answer(envelope, name, is_personal, sender)
+                    else:
+                        answers = self._non_answer(envelope, sender)
+                    self._response(answers, last_non_idle_time, last_non_silence_time)
                 except queue.Empty:
                     pass
                 except Exception:
                     self._logger.log(traceback.format_exc())
-                self._time_events(last_non_idle_time, last_non_silence_time)
+                if self.isEnabled():
+                    self._time_events(last_non_idle_time, last_non_silence_time)
             except Exception:
                 self._logger.log(traceback.format_exc())
 
-    def _handle(self, envelope, name, is_personal, sender):
+    def _answer(self, envelope, name, is_personal, sender):
         """
             envelope = Envelope { message, sender_id, event }
         """
@@ -158,6 +150,21 @@ class DialogThread(threading.Thread):
             pass
         return answers
         
+    def _non_answer(self, envelope, sender):
+        scenario = select_non_answer(
+            self.lib[envelope.event],
+            self._global_lib[envelope.event],
+            self._run_scen, self.interlocutors,
+            self.local_names + self._global_names)
+        answers = None
+        try:
+            while not answers:
+                scn = next(scenario)
+                answers =  self._run_scenario(scn, envelope.message, sender, None)
+        except StopIteration:
+            pass
+        return answers
+
     def _postprocess(self, answers, envelope, name, is_personal, sender):
         answers_left = len(answers)
         ret_answers = []
@@ -166,18 +173,19 @@ class DialogThread(threading.Thread):
         for answer in answers:
             answers_left -= 1
             pp_scenario = select_postproc(
-                self.lib[Event.POSTPROC],
-                self._global_lib[Event.POSTPROC],
+                self.lib[ArtEvent.POSTPROC],
+                self._global_lib[ArtEvent.POSTPROC],
                 self._run_post_scen,
                 sender_id, sender, message, self.interlocutors,
-                is_personal, name, self.local_names + self._global_names, answer
+                is_personal, name, self.local_names + self._global_names,
+                answer['message']
             )
             postproc_answers = None
             try:
-                while not postproc_answers:
-                    scn = next(pp_scenario)
+                for scn in pp_scenario:
                     scn.answers_left = answers_left
-                    postproc_answers = self._run_scenario(scn, message, sender, is_personal, answer)
+                    postproc_answers = self._run_scenario(scn, message, sender, 
+                                                          is_personal, answer['message'])
             except StopIteration:
                 pass
             attach, sticker = None, None
@@ -204,10 +212,9 @@ class DialogThread(threading.Thread):
                 ret_answers.append(send)
         return ret_answers
 
-
     def _run_scenario(self, scen, message, sender, is_personal, answer=None):
         answers = None
-        update_env(scen, message, sender, is_personal, answer)
+        scen.update_env(message, sender, is_personal, answer)
         try:
             answers = run_scen(scen)
         except:
@@ -215,11 +222,12 @@ class DialogThread(threading.Thread):
         #print(answers)
         if answers and [ans for ans in answers if ans['message'] != '']:
             return answers
-        else return None
+        else:
+            return None
 
     def _get_message_sender(self, sender_id):
         return find_element(
-            self._intrs,
+            self.interlocutors,
             lambda i: i.id == sender_id
         )
 
@@ -246,20 +254,6 @@ class DialogThread(threading.Thread):
             { sender_id }
         )
 
-    def _activate_discourse(self):
-        rnd_time = random.randint(10, self.discourse_interval_max.val)
-        #print('Random time: ' + str(rnd_time) + ' s.')
-        timer = threading.Timer(rnd_time, self._discourse, {})
-        timer.start()
-
-    def _discourse(self):
-        try:
-            self._run(Event.DISCOURSE, None)
-        except:
-            self._logger.log(traceback.format_exc())
-        finally:
-            self._activate_discourse()
-
     def drop_session(self, user_id):
         try:
             if user_id in self._sessions:
@@ -267,21 +261,3 @@ class DialogThread(threading.Thread):
         except:
             self._logger.log(traceback.format_exc())
 
-    # duct tape
-    def stop_scenario(self, event, scen_name):
-        if event == Event.POSTPROC:
-            el = find_element(
-                    self._run_post_scen,
-                    lambda el: type(el[1]).__name__.lower() == scen_name)
-            while el:
-                self._run_post_scen.remove(el)
-                el = find_element(
-                        self._run_post_scen,
-                        lambda el: type(el[1]).__name__.lower() == scen_name)
-        else:
-            keys_to_del = []
-            for key in self._run_scen:
-                if type(self._run_scen[key])._name_.lower() == scen_name:
-                    keys_to_del.append(key)
-            for key in keys_to_del:
-                del self._run_scen[key]

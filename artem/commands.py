@@ -1,10 +1,10 @@
 
-from .cmd import *
-from .artem import VERSION, RELEASE
+from .cmd import Control, CommandType, AdminClass, ArgType, ArgRole
+from .version import VERSION, RELEASE
 
 class Commands:
 
-    def execute(self, message, user_id, some_id):
+    def execute(self, message, some_id, admin):
         return self._cmd.execute(message, some_id, admin)
 
     def __init__(self, artem):
@@ -163,22 +163,6 @@ class Commands:
                 lambda some_id:
                     artem._dialog_threads[some_id].session_duration
             )
-        self._cmd.add('discourse_interval',
-            'Get or set maximal time between two discourse'
-            ).action(
-                CommandType.INFO,
-                AdminClass.NONE,
-                [],
-                lambda some_id:
-                    ('Max discourse interval = ' +
-                        str(artem._dialog_threads[some_id].discourse_interval_max.val) + ' sec')
-            ).action(
-                CommandType.SET,
-                AdminClass.GLOBAL,
-                [[ArgType.INTEGER, ArgRole.VALUE]],
-                lambda some_id:
-                    artem._dialog_threads[some_id].discourse_interval_max
-            )
         self._cmd.add('events',
             'Get information about event types and their scenarios'
             ).action(
@@ -252,13 +236,13 @@ class Commands:
             )
         self._cmd.add('stop', 'Stop responding to incoming messages'
             ).action(
-                CommandType.INFO,
+                CommandType.CALL,
                 AdminClass.LOCAL,
                 [],
                 lambda some_id:
                     artem._stop_artem(some_id)
             ).action(
-                CommandType.INFO,
+                CommandType.CALL,
                 AdminClass.GLOBAL,
                 [],
                 artem._stop_artem,
@@ -266,13 +250,13 @@ class Commands:
             )
         self._cmd.add('resume', 'Resume responding of incoming messages'
             ).action(
-                CommandType.INFO,
+                CommandType.CALL,
                 AdminClass.LOCAL,
                 [],
                 lambda some_id:
                     artem._resume_artem(some_id)
             ).action(
-                CommandType.INFO,
+                CommandType.CALL,
                 AdminClass.GLOBAL,
                 [],
                 artem._resume_artem,
@@ -309,9 +293,8 @@ class Commands:
                 CommandType.INFO,
                 AdminClass.NONE,
                 [],
-                """1. New commands /info and /new\n
-2. Removed strict typing of scenarios\n
-3. Redesigned structure of DISCOURSE event. Now it's called TIME event
- and has some different options
-4. other Fixes"""
+                """
+1. TIME, IDLE and SILENCE events have been added.
+2. Scenario API changed, required function parameters removed.
+                """
             )

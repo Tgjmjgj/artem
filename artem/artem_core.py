@@ -16,20 +16,21 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 from .dialogthread import DialogThread
 from .artem_pb2 import ProtoArtem
 from .others import *
-from .scenario import Scenario, wrap_respond, wrap_suitable
-from .commands import *
+from .scenario import Scenario
+from .commands import Commands
+from .cmd import AdminClass
 from .lib import Lib
 from .time_parser import *
-from .Event import Event
-from .ArtemLogger import ArtemLogger
-
-
+from .artevent import ArtEvent
+from .artem_logger import ArtemLogger
+from .defaults import *
 
 class Artem(object):
 
-    def __init__(self, login, password, admins=[], names=[], 
-               enabled_session=True, restore=True, twofact_auth=False):
-
+    def __init__(
+            self, login, password, admins=[], names=[], 
+            enabled_session=True, restore=True, twofact_auth=False
+        ):
         self._lib = Lib()
         # {some_id: [DialogThread, status(True/False)]}
         self._dialog_threads = {}
@@ -67,36 +68,25 @@ class Artem(object):
         static_time=True, scen=None, handler=None, suitable=None):
         try:
             scen = make_scen(scen, handler, suitable)
-            if time_event == Event.IDLE or time_event == Event.SILENCE:
+            if ArtEvent[time_event] == ArtEvent.IDLE or ArtEvent[time_event] == ArtEvent.SILENCE:
                 time_delta = parse_timedelta(first_time)
-                self._lib.add_event(event, scen, time_delta=time_delta, rand_shift=rand_shift)
+                self._lib.add_event(time_event, scen, time_delta=time_delta, rand_shift=rand_shift)
                 for s_id in self._dialog_threads:
-                    self._dialog_threads[s_id].lib.add_event(event, scen,
+                    self._dialog_threads[s_id].lib.add_event(time_event, scen,
                         time_delta=time_delta, rand_shift=rand_shift)
-            elif time_event == Event.TIME:
+            elif ArtEvent[time_event] == ArtEvent.TIME:
                 first_time = parse_time(first_time)
                 second_time = parse_time(second_time)
-                self._lib.add_event(event, scen,
+                self._lib.add_event(time_event, scen,
                     time1=first_time, time2=second_time,
                     rand_shift=rand_shift, static_time=static_time)
                 for s_id in self._dialog_threads:
-                    self._dialog_threads[s_id].lib.add_event(event, scen,
+                    self._dialog_threads[s_id].lib.add_event(time_event, scen,
                         time1=first_time, time2=second_time,
                         rand_shift=rand_shift, static_time=static_time)
             return scen
         except Exception:
             self._logger.log(traceback.format_exc())
-
-    def _create_logger(self):
-        self._logger = logging.getLogger()
-        self._logger.setLevel(logging.INFO)
-        handler = logging.handlers.RotatingFileHandler(
-                ERROR_LOG_FILE, maxBytes=1048576, backupCount=5)
-        handler.setLevel(logging.INFO)
-        formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        self._logger.addHandler(handler)
 
     def _vk_init(self, login, password, twofact_auth):
         try:
@@ -136,14 +126,19 @@ class Artem(object):
                         )]
         return inters
 
-    def _create_dialog_thread(self, some_id,
-        enable_ses=DEFAULT_ENABLED_SESSION,
-        session_dur=DEFAULT_SESSION_DURATION,
-        discourse_max=DEFAULT_DISCOURSE_INTERVAL_MAX,
-        names=self._global_names,
-        admins=self._global_admins):
-
-        if some_id not in self._dialog_threads.index():
+    def _create_dialog_thread(
+            self, some_id,
+            enable_ses=DEFAULT_ENABLED_SESSION,
+            session_dur=DEFAULT_SESSION_DURATION,
+            names=None,
+            admins=None,
+            run=True
+        ):
+        if not names:
+            names = self._global_names
+        if not admins:
+            admins = self._global_admins
+        if some_id not in self._dialog_threads:
             dialog_thread = DialogThread(
                 some_id,
                 self._send_queue,
@@ -154,7 +149,7 @@ class Artem(object):
                 admins,
                 enable_ses,
                 session_dur,
-                discourse_max
+                run
             )
             dialog_thread.start()
             self._dialog_threads[some_id] = dialog_thread
@@ -169,12 +164,13 @@ class Artem(object):
             for name in self._global_names:
                 art.global_names.append(name)
             art.polling_interval = self._secondary_polling_interval.val
+            art.run = self._run
             for sid in self._dialog_threads:
                 thr = art.dialog_threads.add()
                 thr.some_id = sid
-                thr.discourse_interval_max = self._dialog_threads[sid].discourse_interval_max.val
                 thr.session_duration = self._dialog_threads[sid].session_duration.val
                 thr.sessions = self._dialog_threads[sid].enabled_session.val
+                thr.run = self._dialog_threads[sid].isEnabled()
                 for name in self._dialog_threads[sid].local_names:
                     thr.names.append(name)
                 for admin in self._dialog_threads[sid].local_admins:
@@ -195,14 +191,15 @@ class Artem(object):
             self._global_admins = [admin for admin in art.global_admins]
             self._global_names = [name for name in art.global_names]
             self._secondary_polling_interval.val = art.polling_interval
+            self._run = art.run
             for thr in art.dialog_threads:
                 self._create_dialog_thread(
                     thr.some_id,
                     thr.sessions,
                     thr.session_duration,
-                    thr.discourse_interval_max,
                     [name for name in thr.names], 
-                    [admin for admin in thr.admins]
+                    [admin for admin in thr.admins],
+                    thr.run
                 )
         except FileNotFoundError:
             pass
@@ -250,14 +247,13 @@ class Artem(object):
                     for item in response['items']:
                         self._vk.method(
                                 'friends.add', 
-                                {'user_id': item['user_id'], 
-                                'follow': 0}
-                                )
+                                { 'user_id': item['user_id'], 'follow': 0 }
+                            )
                         if item['user_id'] not in self._dialog_threads:
                             self._create_dialog_thread(item['user_id'])
                         (self._dialog_threads[item['user_id']]
                             .queue.put(Envelope(
-                                Event.ADDFRIEND,
+                                ArtEvent.ADDFRIEND,
                                 item['user_id'],
                                 None
                             ))
@@ -272,13 +268,13 @@ class Artem(object):
         threading.Thread(target=self._newfriend_polling).start()
         if self._restore:
             self._deserialize()
-        for thr in self._dialog_threads.values:
-            thr.queue.put(Envelope(Event.START, None, None))
+        for thr in self._dialog_threads.values():
+            thr.queue.put(Envelope(ArtEvent.START, None, None))
         while True:
             try:
                 longpoll = VkLongPoll(self._vk)
                 for event in longpoll.listen():
-                    if (event.type == VkEventType.MESSAGE_NEW and not event.from_me):
+                    if event.type == VkEventType.MESSAGE_NEW and not event.from_me:
 
                         some_id = event.chat_id if event.from_chat else event.user_id
                         if some_id not in self._dialog_threads:
@@ -292,7 +288,7 @@ class Artem(object):
                                 event.text = event.text[1:]
                             self._dialog_threads[some_id].queue.put(
                                 Envelope(
-                                    Event.ANSWER,
+                                    ArtEvent.ANSWER,
                                     event.user_id, 
                                     event.text.lower()
                                 )
