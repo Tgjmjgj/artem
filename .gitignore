@@ -19,3 +19,12 @@ __init__.py
 
 # venv
 aenv/
+
+# serialized data
+dialogs.art
+
+# vk cache
+vk_config.*.json
+
+# credentials
+tests/credentials.py
