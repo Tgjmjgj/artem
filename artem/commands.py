@@ -1,6 +1,9 @@
 
 from .cmd import Control, CommandType, AdminClass, ArgType, ArgRole
 from .version import VERSION, RELEASE
+from .others import ToSend
+from .artevent import ArtEvent
+from functools import reduce
 
 class Commands:
 
@@ -55,7 +58,7 @@ class Commands:
                 glob=True
             )
         self._cmd.add('polling_interval',
-            'Get or set time between secondary polling (all except messages)'
+            'Get or set time between secondary polling (all except messages) [DEPRECATED]'
             ).action(
                 CommandType.INFO,
                 AdminClass.NONE,
@@ -171,7 +174,7 @@ class Commands:
                 [],
                 lambda some_id:
                     ', '.join([(e.name + ': ' + str(len(artem._lib[e])))
-                            for e in Event])
+                            for e in ArtEvent])
             ).action(
                 CommandType.INFO,
                 AdminClass.LOCAL,
@@ -188,12 +191,10 @@ class Commands:
                 AdminClass.NONE,
                 [],
                 lambda some_id:
-                    '\n'.join(
-                        [str(i) + '.------[' + str(scen.scn_type.description) + ']'
-                            for i, scen in enumerate(
-                                reduce(lambda x, y: x + y, artem._lib)
-                        )]
-                    )
+                    '\n'.join([
+                        str(i + 1) + '.------[' + str(scen.scn_type.description) + ']'
+                        for i, scen in enumerate(artem._lib.get_all_scenarios())
+                    ])
             )
         self._cmd.add('dialogs',
             'Provide information about Artem\'s dialogs'
@@ -212,7 +213,7 @@ class Commands:
                     ('Interlocutors of dialog ' + str(args[0]) + ':\n' +
                         '\n'.join(
                             (str(i.id) + ' - ' + i.first_name + ' ' + i.last_name)
-                            for i in artem._dialog_threads[args[0]][0].interlocutors
+                            for i in artem._dialog_threads[args[0]].interlocutors
                         )
                     )
             )
@@ -222,7 +223,7 @@ class Commands:
                 AdminClass.LOCAL,
                 [],
                 lambda some_id:
-                    'ID of current Artem:  ' + str(artem._id)
+                    'ID of current Artem:  ' + str(artem._groupId)
             )
         self._cmd.add('sendto', 'Forcing a message to the specified id'
             ).action(
@@ -288,7 +289,7 @@ class Commands:
                     '\nGlobal status: ' +
                     ('RUNNING' if artem._run else 'SUSPENDED'))
             )
-        self._cmd.add('new', 'Last release features'
+        self._cmd.add('news', 'Last release features'
             ).action(
                 CommandType.INFO,
                 AdminClass.NONE,

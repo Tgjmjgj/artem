@@ -35,8 +35,8 @@ The simplest example of launching:
 ```python
 import artem
 
-art = artem.Artem(USER_LOGIN, USER_PASSWORD)
-art.on('ANSWER', lambda: 'Hello World from Artem!')
+art = artem.Artem(GROUP_ID, GROUP_ACCESS_KEY)
+art.on('MESSAGE', handler='Hello World from Artem!')
 art.alive()
 ```
 
@@ -55,8 +55,8 @@ The simplified scheme of the Artem core functioning:
 Artem has three groups of handled scenarios:
 
 1. Scenarios of incoming events:
-    * ADDFRIEND
-    * ANSWER
+    * JOIN
+    * MESSAGE
 2. Scenarios of outgoing events:
     * DISCOURSE
 3. Scenarios for postprocessing events:

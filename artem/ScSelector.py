@@ -56,7 +56,7 @@ def select_non_answer(scens, global_scens, run, interlocutors, all_names):
             _add(run, new_id, scen)
             yield scen
 
-def select_answer(
+def choose_scenario(
         scens, global_scens, run, sender_id, sender, message,
         interlocutors, is_personal, name, all_names, answer=None
     ):
@@ -92,20 +92,20 @@ def select_postproc(
         scens, global_scens, run, sender_id, sender, message,
         interlocutors, is_personal, name, all_names, answer
     ):
-    return select_answer(scens, global_scens, run, sender_id, sender,
-                         message, interlocutors, is_personal, name, all_names, answer)
+    return choose_scenario(
+        scens, global_scens, run, sender_id, sender, message,
+        interlocutors, is_personal, name, all_names, answer
+    )
 
 def _stop_running(run):
     i = 0
     while i != len(run):
-        if run[i]['scen'].max_idle_time:
-            if left_seconds(run[i]['time']) >= run[i]['scen'].max_idle_time:
-                run.remove(run[i])
-                i -= 1
-        elif run[i]['scen'].replic_count == run[i]['scen'].max_replicas:
-            run.remove(run[i])
-            i -= 1
-        elif not run[i]['scen'].respond:
+        if (
+            run[i]['scen'].max_idle_time and 
+            left_seconds(run[i]['time']) >= run[i]['scen'].max_idle_time or
+            run[i]['scen'].replic_count == run[i]['scen'].max_replicas or
+            not run[i]['scen'].respond
+        ):
             run.remove(run[i])
             i -= 1
         i += 1

@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 import types
 import enum
+from inspect import signature
 
 from .scenario import *
 
@@ -87,9 +88,16 @@ def run_scen(scen):
 
 def _wrap_respond(func):
     if isinstance(func, str):
-        func = lambda: func
+        resp_string = func
+        func = lambda: resp_string
     def wrap(self):
-        ret = func()
+        sign = signature(func)
+        if len(sign.parameters) == 0:
+            ret = func()
+        elif len(sign.parameters) == 1:
+            ret = func(self)
+        else:
+            raise Exception('Handler must take 0 or 1 parameter (self), no more.')
         self.respond = None
         return ret
     return wrap
@@ -105,7 +113,24 @@ def _wrap_suitable(func):
                 return True if message in words else False
         else:
             try:
-                ret = func(message)
+                sign = signature(func)
+                acceptable_args = {
+                    'message': message,
+                    'i_sender': i_sender,
+                    'interlocutors': interlocutors,
+                    'is_personal': is_personal,
+                    'name': name,
+                    'answer': answer
+                }
+                actual_args = []
+                for arg in sign.parameters:
+                    if arg not in acceptable_args:
+                        raise ValueError(
+                            f"Argument '{arg}' is not allowed in suitable scenario function. " +
+                            f"Acceptable args is: {acceptable_args}."
+                        )
+                    actual_args.append(acceptable_args[arg])
+                ret = func(*actual_args)
             except TypeError:
                 ret = func()
             return True if ret else False

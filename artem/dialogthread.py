@@ -115,7 +115,7 @@ class DialogThread(threading.Thread):
                     name = self._extract_name(envelope.message)
                     is_personal = self._is_message_personal(name)
                     sender = self._get_message_sender(envelope.sender_id)
-                    if envelope.event == ArtEvent.ANSWER:
+                    if envelope.event == ArtEvent.MESSAGE:
                         answers = self._answer(envelope, name, is_personal, sender)
                     else:
                         answers = self._non_answer(envelope, sender)
@@ -135,7 +135,7 @@ class DialogThread(threading.Thread):
         """
         if is_personal and self.enabled_session.val:
             self._update_session(envelope.sender_id)
-        scenario = select_answer(
+        scenario = choose_scenario(
             self.lib[envelope.event],
             self._global_lib[envelope.event],
             self._run_scen, envelope.sender_id,
@@ -166,8 +166,19 @@ class DialogThread(threading.Thread):
         return answers
 
     def _postprocess(self, answers, envelope, name, is_personal, sender):
-        answers_left = len(answers)
         ret_answers = []
+        if len(self.lib[ArtEvent.POSTPROC]) == 0:
+            for ans in answers:
+                send = ToSend(
+                    self.some_id,
+                    ans['message'],
+                    ans['sleep'],
+                    ans['attach'],
+                   ans['sticker']
+                )
+                ret_answers.append(send)
+            return ret_answers
+        answers_left = len(answers)
         message = envelope.message if envelope else None
         sender_id = envelope.sender_id if envelope else None
         for answer in answers:
@@ -201,7 +212,7 @@ class DialogThread(threading.Thread):
                     postproc_answers[i]['sleep'],
                     postproc_answers[i]['attach'],
                     postproc_answers[i]['sticker']
-                    )
+                )
                 if postproc_answers[i]['sleep'] == 0.0:
                     send.sleep = answer['sleep']
                 if i == 0:

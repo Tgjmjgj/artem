@@ -11,7 +11,7 @@ from functools import reduce
 
 import requests
 import vk_api
-from vk_api.longpoll import VkLongPoll, VkEventType
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 
 from .dialogthread import DialogThread
 from .artem_pb2 import ProtoArtem
@@ -28,8 +28,8 @@ from .defaults import *
 class Artem(object):
 
     def __init__(
-            self, login, password, admins=[], names=[], 
-            enabled_session=True, restore=True, twofact_auth=False
+            self, groupId, group_acess_token, admins=[], names=[], 
+            enabled_session=True, restore=True
         ):
         self._lib = Lib()
         # {some_id: [DialogThread, status(True/False)]}
@@ -41,17 +41,16 @@ class Artem(object):
         self._run = True
         
         self._logger = ArtemLogger()
-        self._vk_init(login, password, twofact_auth)
+        self._vk_init(group_acess_token)
+        self._groupId = groupId
         self._cmd = Commands(self)
-
-        response = self._vk.method('users.get')
-        name = response[0]['first_name'].lower()
-        if name not in names:
-            names.append(name)
-        name += ' ' + response[0]['last_name'].lower()
-        if name not in names:
-            names.append(name)
-        self._id = response[0]['id']
+        response = self._vk.method('groups.getById')
+        full_name = response[0]['name'].lower()
+        if full_name not in names:
+            names.append(full_name)
+        first_word_name = full_name.split()[0]
+        if first_word_name not in names:
+            names.append(first_word_name)
         self._global_names = sorted(names)
 
     def on(self, event, scen=None, prior=0, handler=None, suitable=None):
@@ -88,32 +87,27 @@ class Artem(object):
         except Exception:
             self._logger.log(traceback.format_exc())
 
-    def _vk_init(self, login, password, twofact_auth):
+    def _vk_init(self, access_token):
         try:
-            if not twofact_auth:
-                self._vk = vk_api.VkApi(login, password)
-            else:
-                self._vk = vk_api.VkApi(
-                        login, password, 
-                        auth_handler = lambda: 
-                            (input('Enter authentication code: '), True)
-                    )
-            self._vk.auth()
+            self._vk = vk_api.VkApi(token=access_token)
         except Exception:
             self._logger.log(traceback.format_exc())
 
     def _get_interlocutors(self, some_id): 
-        if some_id < CHAT_ID_MAX:
+        if some_id > CHAT_ID_START:
             response = self._vk.method(
-                    'messages.getChat',
-                    {'chat_id': some_id, 'fields': 'users'})
-            inters = [Interlocutor(
-                            user['id'], 
-                            user['first_name'], 
-                            user['last_name']) 
-                        for user in response['users']
-                        if user['id'] != self._id
-                        ]
+                'messages.getConversationMembers',
+                { 'peer_id': some_id }
+            )
+            inters = [
+                Interlocutor(
+                    profile['id'], 
+                    profile['first_name'], 
+                    profile['last_name']
+                ) 
+                for profile in response['profiles']
+                if profile['id'] != self._groupId
+            ]
         else:
             response = self._vk.method(
                     'users.get', 
@@ -212,87 +206,64 @@ class Artem(object):
         try:
             while True:
                 answer = self._send_queue.get()
-                if answer.attach:
+                if answer.attach is not None:
                     if answer.attach.startswith('http'):
                         image = session.get(answer.attach, stream=True)
                         photo = upload.photo_messages(photos=image.raw)[0]
                         answer.attach = 'photo{}_{}'.format(
                             photo['owner_id'], photo['id']
-                            )
+                        )
                         answer.sleep = 0.0
-                whose_id = 'chat_id' if answer.id < CHAT_ID_MAX else 'user_id'
                 time.sleep(answer.sleep)
                 self._vk.method(
-                        'messages.send',
-                        {
-                            whose_id: answer.id, 
-                            'message': answer.message,
-                            'random_id': random.getrandbits(32),
-                            'attachment': answer.attach,
-                            'sticker_id': answer.sticker
-                        }
-                    )
-        except Exception:
-            self._logger.log(traceback.format_exc())
-
-    def _newfriend_polling(self):
-        try:
-            while True:
-                response = self._vk.method(
-                        'friends.getRequests',
-                        {'count': 100, 'out': 0,
-                        'extended': 1, 'need_viewed': 1}
-                        )
-                if response['count'] != 0:
-                    for item in response['items']:
-                        self._vk.method(
-                                'friends.add', 
-                                { 'user_id': item['user_id'], 'follow': 0 }
-                            )
-                        if item['user_id'] not in self._dialog_threads:
-                            self._create_dialog_thread(item['user_id'])
-                        (self._dialog_threads[item['user_id']]
-                            .queue.put(Envelope(
-                                ArtEvent.ADDFRIEND,
-                                item['user_id'],
-                                None
-                            ))
-                        )
-                time.sleep(self._secondary_polling_interval.val)
+                    'messages.send',
+                    {
+                        'peer_id': answer.id, 
+                        'message': answer.message,
+                        'random_id': random.getrandbits(32),
+                        'attachment': answer.attach,
+                        'sticker_id': answer.sticker
+                    }
+                )
         except Exception:
             self._logger.log(traceback.format_exc())
 
     def alive(self):
-
         threading.Thread(target=self._send_listener).start()
-        threading.Thread(target=self._newfriend_polling).start()
         if self._restore:
             self._deserialize()
         for thr in self._dialog_threads.values():
             thr.queue.put(Envelope(ArtEvent.START, None, None))
         while True:
             try:
-                longpoll = VkLongPoll(self._vk)
+                longpoll = VkBotLongPoll(self._vk, self._groupId)
                 for event in longpoll.listen():
-                    if event.type == VkEventType.MESSAGE_NEW and not event.from_me:
-
-                        some_id = event.chat_id if event.from_chat else event.user_id
+                    if str(event.object.from_id) == '-' + self._groupId:
+                        continue
+                    print(event)
+                    print()
+                    if event.type == VkBotEventType.MESSAGE_NEW:
+                        some_id = event.object.peer_id
+                        sender_id = event.object.from_id
+                        msg_text = event.object.text.lower()
                         if some_id not in self._dialog_threads:
                             self._create_dialog_thread(some_id)
-
-                        if event.text.startswith('/'):
-                            self._executeCommand(event.text.lower(), event.user_id, some_id)
+                        if msg_text.startswith('/'):
+                            self._executeCommand(msg_text, sender_id, some_id)
                         elif self._run and self._dialog_threads[some_id].isEnabled():
-                            if event.text.startswith('.'):
-                                self._dialog_threads[some_id].drop_session(event.user_id)
-                                event.text = event.text[1:]
+                            if msg_text.startswith('.'):
+                                self._dialog_threads[some_id].drop_session(sender_id)
+                                msg_text = msg_text[1:]
                             self._dialog_threads[some_id].queue.put(
-                                Envelope(
-                                    ArtEvent.ANSWER,
-                                    event.user_id, 
-                                    event.text.lower()
-                                )
+                                Envelope(ArtEvent.MESSAGE, sender_id, msg_text)
                             )
+                    elif event.type == VkBotEventType.GROUP_JOIN:
+                        user_id = event.object.user_id
+                        if user_id not in self._dialog_threads:
+                            self._create_dialog_thread(user_id)
+                        self._dialog_threads[user_id].queue.put(
+                            Envelope(ArtEvent.JOIN, user_id, None)
+                        )
             except Exception:
                 self._logger.log(traceback.format_exc())
 
@@ -303,10 +274,10 @@ class Artem(object):
             admin = AdminClass.LOCAL
         else:
             admin = AdminClass.NONE
-        answer, need_save = self._cmd.execute(message, some_id, admin)
+        output, need_save = self._cmd.execute(message, some_id, admin)
         if need_save:
             self._serialize()
-        self._send_queue.put(ToSend(some_id, answer))
+        self._send_queue.put(ToSend(some_id, output))
 
     def _stop_artem(self, some_id=None):
         if some_id:
