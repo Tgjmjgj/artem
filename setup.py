@@ -10,7 +10,7 @@ with open(REQUIREMENTS_FILE) as f:
 
 install_reqs.append('setuptools')
 
-VERSION = '2.0.1'
+VERSION = '3.0.1'
 
 setup(name='artem',
       version=VERSION,
