@@ -28,3 +28,6 @@ vk_config.*.json
 
 # credentials
 tests/credentials.py
+
+# logs
+log

@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import threading
 import datetime
 import json
@@ -25,11 +26,28 @@ from .artevent import ArtEvent
 from .artem_logger import ArtemLogger
 from .defaults import *
 
-class Artem(object):
+class Artem():
+    """Main Artem bot class
+    
+    Parameters
+    ----------
+    groupId : str
+        Id of VK community, where the bot will be placed
+    group_acess_token : str
+        Secret community access token
+    admins : list of str, optional
+        CLI bot admin Id list, by default []
+    names : list of str, optional
+        List of bot names to contact, by default []
+    enable_session : bool, optional
+        Will the bot be able to memorize the conversation and answer without name invocation, by default True
+    restore : bool, optional
+        Enable or not the state of configs after bot restart, by default True
+    """
 
     def __init__(
-            self, groupId, group_acess_token, admins=[], names=[], 
-            enabled_session=True, restore=True
+            self, groupId, group_acess_token, admins=[],
+            names=[], enable_session=True, restore=True
         ):
         self._lib = Lib()
         # {some_id: [DialogThread, status(True/False)]}
@@ -37,9 +55,10 @@ class Artem(object):
         self._restore = restore
         self._global_admins = admins
         self._secondary_polling_interval = Wrap(DEFAULT_POLLING_INTERVAL)
+        self._sessions = Wrap(enable_session)
         self._send_queue = queue.Queue()
         self._run = True
-        
+        self._sessions = Wrap(enable_session)
         self._logger = ArtemLogger()
         self._vk_init(group_acess_token)
         self._groupId = groupId
@@ -53,7 +72,39 @@ class Artem(object):
             names.append(first_word_name)
         self._global_names = sorted(names)
 
-    def on(self, event, scen=None, prior=0, handler=None, suitable=None):
+    def on(
+        self,
+        event, scen=None, prior=0, handler=None, suitable=None):
+        """Add scenario (handler) to one of the regular events
+        
+        Parameters
+        ----------
+        event : Union[str, :class:`artem.artevent.ArtEvent`]
+            Available events: 'MESSAGE', 'START', 'JOIN', 'POSTPROC'
+        scen : :class:`artem.scenario.Scenario`, optional
+            Handler in form of a complete Scenario class to this event, by default None
+        prior : int, optional
+            Priority of the scenario, the lower the value, the higher the priority, by default 0
+        handler : Union[str, Function], optional
+            Scenario event handler function, by default None
+            May be just a string representing the clear answer.
+            Or function, which can take one parameter 'self' - Scenario object with
+            all members: message, i_sender, is_personal, answer, etc.
+        suitable : Union[str, Function], optional
+            Scenario event handler checker function, by default None
+            It can be a string with special syntax:
+                "msg" - scenario fits if the message EXACTLY matches 'msg'
+                "msg1|msg2" - fits if the message EXACTLY matches 'msg1' OR 'msg2'
+                "<msg1|msg2>" - fits if the message CONTAINS 'msg1' OR 'msg2' 
+            Or it can be a function, which can takes such parameters:
+                message, i_sender, interlocutors, is_personal, name, answer
+            in no particular order and number
+            
+        Returns
+        -------
+        `artem.scenario.Scenario`
+            Completed scenario class
+        """
         try:
             scen = make_scen(scen, handler, suitable)
             self._lib.add_event(event, scen, prior)
@@ -65,6 +116,49 @@ class Artem(object):
 
     def ontime(self, time_event, first_time, second_time=None, rand_shift=0,
         static_time=True, scen=None, handler=None, suitable=None):
+        """Add scenario to (handler) to one of the time-based event
+        
+        Parameters
+        ----------
+        event : Union[str, :class:`artem.artevent.ArtEvent`]
+            Available events: 'TIME', 'IDLE', 'SILENCE'
+        first_time : Union[datetime.datetime, str]
+            For 'TIME' event it is the main datetime when run the scenario,
+            or first datetime in interval scenario
+            For 'IDLE' and 'SILENCE' events it need to be an human-friendly interval string, like:
+                '30 seconds', '2 hours 10 minutes', '1 day'
+        second_time : datetime.datetime, optional
+            Second datetime in 'TIME' interval scenario, by default None
+        rand_shift : int, optional
+            The number of seconds by which time may deviate from the specified time, by default 0
+        static_time : bool, optional
+            Only for the interval 'TIME' event.
+            It means from what point in time the next interval should be started.
+            If set to True the next interval starts clearly after delta time (second_time - first_time).
+            If set to False the next interval starts after delta time shifted by random value from rand_shift.
+            By default True
+        scen : :class:`artem.scenario.Scenario`, optional
+            Handler in form of a complete Scenario class to this event, by default None
+        handler : Union[str, Function], optional
+            Scenario event handler function, by default None
+            May be just a string representing the clear answer.
+            Or function, which can take one parameter 'self' - Scenario object with
+            all members: message, i_sender, is_personal, answer, etc.
+        suitable : Union[str, Function], optional
+            Scenario event handler checker function, by default None
+            It can be a string with special syntax:
+                "msg" - scenario fits if the message EXACTLY matches 'msg'
+                "msg1|msg2" - fits if the message EXACTLY matches 'msg1' OR 'msg2'
+                "<msg1|msg2>" - fits if the message CONTAINS 'msg1' OR 'msg2' 
+            Or it can be a function, which can takes such parameters:
+                message, i_sender, interlocutors, is_personal, name, answer
+            in no particular order and number
+        
+        Returns
+        -------
+        `artem.scenario.Scenario`
+            Completed scenario class
+        """
         try:
             scen = make_scen(scen, handler, suitable)
             if ArtEvent[time_event] == ArtEvent.IDLE or ArtEvent[time_event] == ArtEvent.SILENCE:
@@ -229,6 +323,8 @@ class Artem(object):
             self._logger.log(traceback.format_exc())
 
     def alive(self):
+        """Start the bot
+        """
         threading.Thread(target=self._send_listener).start()
         if self._restore:
             self._deserialize()
@@ -240,14 +336,12 @@ class Artem(object):
                 for event in longpoll.listen():
                     if str(event.object.from_id) == '-' + self._groupId:
                         continue
-                    print(event)
-                    print()
                     if event.type == VkBotEventType.MESSAGE_NEW:
                         some_id = event.object.peer_id
                         sender_id = event.object.from_id
                         msg_text = event.object.text.lower()
                         if some_id not in self._dialog_threads:
-                            self._create_dialog_thread(some_id)
+                            self._create_dialog_thread(some_id, self._sessions)
                         if msg_text.startswith('/'):
                             self._executeCommand(msg_text, sender_id, some_id)
                         elif self._run and self._dialog_threads[some_id].isEnabled():
@@ -260,7 +354,7 @@ class Artem(object):
                     elif event.type == VkBotEventType.GROUP_JOIN:
                         user_id = event.object.user_id
                         if user_id not in self._dialog_threads:
-                            self._create_dialog_thread(user_id)
+                            self._create_dialog_thread(user_id, self._sessions)
                         self._dialog_threads[user_id].queue.put(
                             Envelope(ArtEvent.JOIN, user_id, None)
                         )

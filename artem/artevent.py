@@ -15,6 +15,9 @@ class ArtEventMetaclass(enum.EnumMeta):
             return None
 
 class ArtEvent(enum.Enum, metaclass=ArtEventMetaclass):
+    """Enumeration of the available events
+    
+    """
     START = 1
     JOIN = 2
     MESSAGE = 3
