@@ -57,12 +57,14 @@ Artem has three groups of handled scenarios:
 1. Scenarios of incoming events:
     * JOIN
     * MESSAGE
-2. Scenarios of outgoing events:
-    * DISCOURSE
+2. Scenarios of time events:
+    * TIME
+    * IDLE
+    * SILENCE
 3. Scenarios for postprocessing events:
     * POSTPROC
-
-(and START scenarios - once when bot starting)
+4. Startup scenario:
+    * START
 
 Full event Handling Schema:
 

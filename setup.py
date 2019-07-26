@@ -10,12 +10,12 @@ with open(REQUIREMENTS_FILE) as f:
 
 install_reqs.append('setuptools')
 
-VERSION = '1.11.03'
+VERSION = '2.0.1'
 
 setup(name='artem',
       version=VERSION,
-      description='Simple core for creating chat bots in VK.com',
-      author='ParadoxMaster',
+      description='Chat bot engine for the VK communities',
+      author='Pavel Karpovich',
       author_email='Chesh397@mail.ru',
       url='https://github.com/Tgjmjgj/artem',
       download_url = ('https://github.com/Tgjmjgj/artem/archive/' + 
@@ -26,7 +26,7 @@ setup(name='artem',
       extras_require={},
       license='Apache 2.0',
       platforms='any',
-      keywords=['vk','chat bot', 'bot core'],
+      keywords=['vk','chat bot', 'bot core', 'bot', 'bot engine', 'vk bot'],
       classifiers=[
             'License :: OSI Approved :: Apache Software License',
             'Development Status :: 3 - Alpha',
@@ -35,12 +35,12 @@ setup(name='artem',
             'Operating System :: Microsoft :: Windows',
             'Operating System :: Unix',
             'Programming Language :: Python :: 3 :: Only',
-            'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
             'Topic :: Scientific/Engineering :: Artificial Intelligence',
             'Topic :: Communications :: Chat'
       ],
       long_description="""
-Simple core for creating chat bots in VK.com
+Simple core for creating chat bots in VK.com groups
 =============
 eMail: Chesh397@mail.ru
 This project is hosted at https://github.com/Tgjmjgj/artem

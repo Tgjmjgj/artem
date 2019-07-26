@@ -1,3 +1,3 @@
 
-VERSION = '1.11.03'
-RELEASE = 'Artem3000'
+VERSION = '2.0.1'
+RELEASE = 'Artem.Community'
