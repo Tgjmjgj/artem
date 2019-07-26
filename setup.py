@@ -44,4 +44,6 @@ Simple core for creating chat bots in VK.com groups
 =============
 eMail: Chesh397@mail.ru
 This project is hosted at https://github.com/Tgjmjgj/artem
-""")
+""",
+    long_description_content_type="text/markdown",
+)
