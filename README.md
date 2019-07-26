@@ -6,7 +6,7 @@
 ![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)
 ![License](https://img.shields.io/badge/license-apache-yellow.svg)
 
-## <span style="color: #660000">Yes, this is another deprecated project.</span>
+## <span style="color: #660000">This project is no longer being developed, but it still works fine.</span>
 
 ## _Simple core for creating chatbots in VK (vk.com)_
 
