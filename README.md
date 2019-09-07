@@ -47,8 +47,7 @@ After running this script, the bot-chat will answer any incoming message with th
 ### Artem core
 
 The simplified scheme of the Artem core functioning:
-
-<img src = "https://s3-eu-west-1.amazonaws.com/images.someone.new.name/artemS.png" width=600 alt="Artem Scheme" style="text-align: center;" />
+<img src = "https://drive.google.com/uc?export=view&id=15QQPxZZcNWjPZaew2cQ2ZYQHeRA8Hdyo" width=600 alt="Artem Scheme" style="text-align: center;" />
 
 ### Artem events
 
@@ -68,4 +67,4 @@ Artem has three groups of handled scenarios:
 
 Full event Handling Schema:
 
-<img src="https://s3-eu-west-1.amazonaws.com/images.someone.new.name/artem_events.png" alt="Artem events" style="text-align: center;" />
+<img src="https://drive.google.com/uc?export=view&id=19TmAbMxYA3vPM3FhOtY-LC1gZqxzH0SM" alt="Artem events" style="text-align: center;" />
