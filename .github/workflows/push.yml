@@ -1,0 +1,10 @@
+on: push
+name: New workflow
+jobs:
+  pythonStyleChecker:
+    name: Python Style Checker
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Python Style Checker
+      uses: andymckay/pycodestyle-action@0.1.3
